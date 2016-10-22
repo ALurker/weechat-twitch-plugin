@@ -12,13 +12,6 @@
   * You should have received a copy of the GNU General Public License
   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
   * 
-  * 
-  * This script checks stream status of any channel on any servers
-  * listed in the "plugins.var.python.twitch.servers" setting. When you
-  * switch to a buffer it will display updated infomation about the stream
-  * in the title bar. Typing '/twitch' in buffer will also fetch updated
-  * infomation. '/whois nick' will lookup user info and display it in current
-  *
   * This code is heavily based of of the work by mumixam located at
   * https://github.com/mumixam/weechat-twitch
   *
@@ -30,7 +23,7 @@
 #include <string.h>
 #include "weechat-plugin.h"
 
-WEECHAT_PLUGIN_NAME("Twitch");
+WEECHAT_PLUGIN_NAME("twitch");
 WEECHAT_PLUGIN_DESCRIPTION("Twitch plugin for WeeChat");
 WEECHAT_PLUGIN_AUTHOR("ALurker <ALurker@outlook.com>");
 WEECHAT_PLUGIN_VERSION("0.1");
@@ -45,21 +38,12 @@ char* usernotice_modifier_cb(const void *pointer,
                              const char *modifier_data,
                              const char *string) {
 
-	weechat_printf(NULL, "Entered USERNOTICE");
-
 	if (!string) {
 		return NULL;
 	}
 
-	weechat_printf(NULL, "Entered USERNOTICE; String != NULL");
-
-	//char *color_prefix_network = weechat_color("chat_prefix_network");
-	//char *color_chat = weechat_color("chat");
-
 	struct t_hashtable *hashtable_message_in;
 	struct t_hashtable *hashtable_message_parse;
-
-	weechat_printf(NULL, "Creating weechat_hashtable_new");
 
 	hashtable_message_in = weechat_hashtable_new(8,
 	                                             WEECHAT_HASHTABLE_STRING,
@@ -70,198 +54,179 @@ char* usernotice_modifier_cb(const void *pointer,
 	if (!hashtable_message_in) {
 		return NULL;
 	}
-
-	weechat_printf(NULL, "Created weechat_hashtable_new");
 
 	weechat_hashtable_set(
 		hashtable_message_in,
 		"message",
 		string
 	);
+
+	if (!weechat_hashtable_has_key(hashtable_message_in, "message")) {
+		return NULL;
+	}
+
 	hashtable_message_parse = weechat_info_get_hashtable(
 		"irc_message_parse",
 		hashtable_message_in
 	);
 
-	/* irc_in_USERNOTICE will have servername in modifier_data */
-	int length_server_name = strlen(modifier_data);
+	if (!hashtable_message_parse) {
+		return NULL;
+	}
 
-	char *channel_name = weechat_hashtable_get(
-		hashtable_message_parse,
-		"channel"
+	/* Server Name should be in modifier_data */
+	int length_server = strlen(modifier_data);
+	/* Increment by 1 to include \0 */
+	char *string_server_name = weechat_strndup(modifier_data, length_server + 1);
+
+	int length_channel = strlen(weechat_hashtable_get(hashtable_message_parse, "channel"));
+	char *string_channel_name = weechat_strndup(
+		weechat_hashtable_get(hashtable_message_parse, "channel"),
+		length_channel + 1
 	);
-	int length_channel_name = strlen(channel_name);
-	/* Final string will be "server.channel\0" */
-	int length_string = 2 + length_channel_name + length_server_name;
-	char *string_buffer = calloc(length_string, sizeof(char));
-	snprintf(string_buffer,
-	         length_string,
-	         "%s.%s",
-	         modifier_data,
-	         channel_name
-	);
-	struct t_gui_buffer *buffer_irc = weechat_buffer_search("irc", string_buffer);
-	free(string_buffer);
+
+	/* Buffer Name: znc-twitch.#day9tv\0
+	 * Adding of 2 to allow for period and endline
+	 */
+
+	int length_buffer = 2 + length_server + length_channel;
+	char *string_buffer = calloc(length_buffer, sizeof(char));
+	snprintf(string_buffer, length_buffer, "%s.%s", string_server_name, string_channel_name);
+
+	char *string_buffer_plugin = "irc";
+	struct t_gui_buffer *buffer_channel = weechat_buffer_search(string_buffer_plugin, string_buffer);
+
+	if (!buffer_channel) {
+		return NULL;
+	}
+
+	struct t_gui_buffer *buffer_server = weechat_buffer_search(string_buffer_plugin, string_server_name);
+
+	if (!buffer_channel) {
+		return NULL;
+	}
 
 	if (weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
-		weechat_printf(NULL, "tags exists");
+		/* Tags should be seperated by ; */
 		int count_tags;
 		char **tags;
-		tags = weechat_string_split(
-			weechat_hashtable_get(
-				hashtable_message_parse,
-				"tags"
-			),
-			";",
-			0,
-			0,
-			&count_tags
+		tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"),
+		                            ";",
+		                            0,
+		                            0,
+		                            &count_tags
 		);
-		char **sys_msg;
+
+		if (!tags) {
+			return NULL;
+		}
+
+		int count_system_message;
+		char **system_message_array;
 		for (int i = 0; i < count_tags; i++) {
-			int is_system_msg = weechat_string_match(tags[i], "system-msg*", 1);
-			if (is_system_msg == 1) {
-				int count_msg;
-				sys_msg = weechat_string_split(
-					tags[i],
-					"=",
-					0,
-					2,
-					&count_msg
-				);
-				/* at this point, no need to continue search */
+			if (weechat_string_match(tags[i], "system-msg=*", 1)) {
+				system_message_array = weechat_string_split(tags[i], "=", 0, 2, &count_system_message);
+				/* Once we find system-msg, no need to continue for loop */
 				i = count_tags;
 			}
 		}
-		weechat_printf(NULL, "Checking sys_msg");
-		if (!sys_msg) {
+
+		if (!system_message_array) {
 			return NULL;
 		}
-		weechat_printf(NULL, "sys_msg exists");
-		char *sys_msg_readable = weechat_string_replace(sys_msg[1], "\\s", " ");
-		weechat_string_free_split(sys_msg);
+
+		/* If above worked correctly, system_message_array[1] should have the message
+		 * however, twitch is odd in that spaces are replaced with \\s
+		 */
+
+		char *system_message = weechat_string_replace(system_message_array[1], "\\s", " ");
+
+		/* Done unless there is the optional text
+		 * In that case, append
+		 */
+
+		char *string_comment = NULL;
+		int is_key_text = weechat_hashtable_has_key(hashtable_message_parse, "text");
+		int is_key_pos = weechat_hashtable_has_key(hashtable_message_parse, "pos_text");
+		if ((is_key_text != 0) && (is_key_pos != 0)) {
+			char *pos_value = weechat_hashtable_get(hashtable_message_parse, "pos_text");
+			if (weechat_strcasecmp(pos_value, "-1") != 0) {
+				char *string_comment_prefix = " [Comment: ";
+				int length_comment_prefix = strlen(string_comment_prefix);
+
+				int length_text = strlen(weechat_hashtable_get(hashtable_message_parse, "text"));
+				char *string_comment_text = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "text"), length_text + 1);
+
+				char *string_comment_suffix = "]";
+				int length_comment_suffix = strlen(string_comment_suffix);
+
+				int length_comment = length_comment_prefix + length_text + length_comment_suffix + 1;
+
+				string_comment = calloc(length_comment, sizeof(char));
+				snprintf(string_comment, length_comment, "%s%s%s", string_comment_prefix, string_comment_text, string_comment_suffix);
+
+				weechat_printf(buffer_server,
+				               "%s%s%s",
+				               weechat_prefix("network"),
+				               system_message,
+				               string_comment
+				);
+				weechat_printf(buffer_channel,
+				               "%s%s%s",
+				               weechat_prefix("network"),
+				               system_message,
+				               string_comment
+				);
+
+				/* Stuff to Free only if text */
+				free(string_comment_text);
+			} else {
+				weechat_printf(buffer_server,
+				               "%s%s",
+				               weechat_prefix("network"),
+				               system_message
+				);
+				weechat_printf(buffer_channel,
+				               "%s%s",
+				               weechat_prefix("network"),
+				               system_message
+				);
+			}
+		} else {
+			weechat_printf(buffer_server,
+				       "%s%s",
+				       weechat_prefix("network"),
+				       system_message
+			);
+			weechat_printf(buffer_channel,
+				       "%s%s",
+				       weechat_prefix("network"),
+				       system_message
+			);
+		}
+
+		/* Stuff to Free only if tags */
+		free(system_message);
+		weechat_string_free_split(system_message_array);
 		weechat_string_free_split(tags);
 
-		char *text_buffer = NULL;
-		if (weechat_hashtable_has_key(hashtable_message_parse, "text")) {
-			char *comment = " [Comment] ";
-			int length_comment = strlen(comment);
-			char *text = weechat_hashtable_get(
-				hashtable_message_parse,
-				"text"
-			);
-			int length_text = strlen(text);
-			int length_full = length_comment + length_text + strlen(sys_msg_readable) + 1;
-			text_buffer = calloc(length_full, sizeof(char));
-			snprintf(text_buffer,
-				length_full,
-				"%s%s%s",
-				sys_msg_readable,
-				comment,
-				text
-			);
-		} else {
-			weechat_printf(NULL, "No \"text\" in message_parse");
-		}
-		weechat_printf(NULL, "checking text_buffer");
-		if (!text_buffer) {
-			return NULL;
-		}
-		weechat_printf(NULL, "text_buffer exists");
-
-		int length_cpn = strlen(weechat_color("chat_prefix_network"));
-		int length_chat = strlen(weechat_color("chat"));
-		int length_text = strlen(text_buffer);
-
-		int length_final = length_cpn + length_chat + length_text + 1;
-		char *text_final = calloc(length_final, sizeof(char));
-		snprintf(text_final,
-		         length_final,
-		         "%s--%s %s",
-		         weechat_color("chat_prefix_network"),
-		         weechat_color("chat"),
-		         text_buffer
-		);
-
-		weechat_printf(
-			buffer_irc,
-			"%s",
-			text_final
-		);
-
-		/* After Use */
-		free(sys_msg_readable);
-		free(text_buffer);
-
-		//return text_final;
-		return "";
-	}
-	return NULL;
-}
-
-int usernotice_signal_cb(const void *pointer,
-                         void *data,
-                         const char *signal,
-                         const char *type_data,
-                         void *signal_data) {
-
-	weechat_printf(NULL, "Entered USERNOTICE");
-
-	if (!signal_data) {
-		weechat_printf(NULL, "Error: No signal_data");
-		return WEECHAT_RC_ERROR;
 	}
 
-	weechat_printf(NULL, "Entered USERNOTICE; String == %s", signal_data);
-
-	struct t_hashtable *hashtable_message_in;
-	struct t_hashtable *hashtable_message_parse;
-
-	weechat_printf(NULL, "Creating hashtable_message_in");
-
-	hashtable_message_in = weechat_hashtable_new(8,
-	                                             WEECHAT_HASHTABLE_STRING,
-	                                             WEECHAT_HASHTABLE_STRING,
-	                                             NULL,
-	                                             NULL);
-
-	if (!hashtable_message_in) {
-		weechat_printf(NULL, "Error: No hashtable_message_in");
-		return WEECHAT_RC_ERROR;
-	}
-
-	weechat_printf(NULL, "Created hashtable_message_in");
-
-	weechat_hashtable_set(
-		hashtable_message_in,
-		"message",
-		signal_data
-	);
-
-	if (weechat_hashtable_has_key(hashtable_message_in, "message")) {
-		weechat_printf(NULL, "Message in hashtable_message_in");
-	}
-
-	weechat_printf(NULL, "Creating hashtable_message_parse");
-
-	hashtable_message_parse = weechat_info_get_hashtable(
-		"irc_message_parse",
-		hashtable_message_in
-	);
-	
-	if (!hashtable_message_parse) {
-		weechat_printf(NULL, "Error: No hashtable_message_parse");
-		return WEECHAT_RC_ERROR;
-	}
-
-	weechat_printf(NULL, "Created hashtable_message_parse");
-
-	weechat_hashtable_free(hashtable_message_in);
+	/* Stuff to Free */
+	free(string_buffer);
+	free(string_server_name);
+	free(string_channel_name);
 	weechat_hashtable_free(hashtable_message_parse);
+	weechat_hashtable_free(hashtable_message_in);
 
-	weechat_printf(NULL, "Freed the hashtables");
+	/* Stuff to Return
+	 * For some reason returning an empty string gets rid of the command not found message
+	 */
 
-	return WEECHAT_RC_OK;
+	int length_return = 2;
+	char *result = malloc(length_return);
+	snprintf(result, length_return, "%s", "");
+	return result;
 }
 
 int weechat_plugin_init(struct t_weechat_plugin *plugin,
@@ -270,25 +235,10 @@ int weechat_plugin_init(struct t_weechat_plugin *plugin,
 
 	weechat_plugin = plugin;
 
-	//usernotice_hook = weechat_hook_modifier("irc_in_USERNOTICE",
-	//                      &usernotice_modifier_cb,
-	//		      NULL,
-	//		      NULL);
-
-	usernotice_hook = weechat_hook_signal("*,irc_in_USERNOTICE",
-	                      &usernotice_signal_cb,
-			      NULL,
-			      NULL);
-
-	/**weechat_hook_command ("double",
-	*                    "Display two times a message "
-	*                    "or execute two times a command",
-	*                    "message | command",
-	*                    "message: message to display two times\n"
-	*                    "command: command to execute two times",
-	*                    NULL,
-	*                    &command_double_cb, NULL, NULL);
-	**/
+	usernotice_hook = weechat_hook_modifier("irc_in_USERNOTICE",
+	                                        &usernotice_modifier_cb,
+	                                        NULL,
+	                                        NULL);
 
 	return WEECHAT_RC_OK;
 }
