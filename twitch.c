@@ -111,8 +111,28 @@ char* cb_modifier_clearchat(const void *pointer,
 
 	weechat_printf(NULL, "User: %s", string_user);
 
-	//FIXME
-	//weechat_printf(NULL, "hashtable_message_parse allocated successfully"
+	/* Get the Channel Buffer */
+	char *string_buffer_plugin = "irc";
+	int length_buffer_channel = length_channel + length_server + 2;
+	char *string_buffer_channel = calloc(length_buffer_channel, sizeof(char));
+	snprintf(string_buffer_channel, length_buffer_channel, "%s.%s", string_server, string_channel);
+	struct t_gui_buffer *buffer_channel = weechat_buffer_search(string_buffer_plugin, string_buffer_channel);
+
+	if (!buffer_channel) {
+		return NULL;
+	}
+
+	/* Get the Server Buffer */
+	char *string_server_prefix = "server.";
+	int length_server_prefix = strlen(string_server_prefix);
+	int length_buffer_server = length_server + length_server_prefix + 1;
+	char *string_buffer_server = calloc(length_buffer_server, sizeof(char));
+	snprintf(string_buffer_server, length_buffer_server, "%s%s", string_server_prefix, string_server);
+	struct t_gui_buffer *buffer_server = weechat_buffer_search(string_buffer_plugin, string_buffer_channel);
+
+	if (!buffer_server) {
+		return NULL;
+	}
 
 	int count_tags;
 	char **tags;
@@ -125,6 +145,10 @@ char* cb_modifier_clearchat(const void *pointer,
 		                            &count_tags
 		);
 	}
+
+	/* Stuff to Free */
+	free(string_buffer_channel);
+	weechat_hashtable_free(hashtable_message_parse);
 
 	/* Stuff to Return
 	 * For some reason returning an empty string gets rid of the command not found message
@@ -162,7 +186,6 @@ char* cb_modifier_usernotice(const void *pointer,
 	/* Buffer Name: znc-twitch.#day9tv\0
 	 * Adding of 2 to allow for period and endline
 	 */
-
 	int length_buffer = 2 + length_server + length_channel;
 	char *string_buffer = calloc(length_buffer, sizeof(char));
 	snprintf(string_buffer, length_buffer, "%s.%s", string_server_name, string_channel_name);
@@ -336,6 +359,11 @@ int weechat_plugin_end (struct t_weechat_plugin *plugin) {
 	if(hook_usernotice) {
 		weechat_unhook(hook_usernotice);
 		hook_usernotice = NULL;
+	}
+	
+	if(hook_clearchat) {
+		weechat_unhook(hook_clearchat);
+		hook_clearchat = NULL;
 	}
 
 	return WEECHAT_RC_OK;
