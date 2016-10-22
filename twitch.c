@@ -30,7 +30,7 @@
 #include <string.h>
 #include "weechat-plugin.h"
 
-WEECHAT_PLUGIN_NAME("Twitch");
+WEECHAT_PLUGIN_NAME("twitch");
 WEECHAT_PLUGIN_DESCRIPTION("Twitch plugin for WeeChat");
 WEECHAT_PLUGIN_AUTHOR("ALurker <ALurker@outlook.com>");
 WEECHAT_PLUGIN_VERSION("0.1");
@@ -82,6 +82,10 @@ char* usernotice_modifier_cb(const void *pointer,
 		"irc_message_parse",
 		hashtable_message_in
 	);
+
+	if (!hashtable_message_parse) {
+		return NULL;
+	}
 
 	/* irc_in_USERNOTICE will have servername in modifier_data */
 	int length_server_name = strlen(modifier_data);
@@ -193,8 +197,13 @@ char* usernotice_modifier_cb(const void *pointer,
 		free(sys_msg_readable);
 		free(text_buffer);
 
+		weechat_hashtable_free(hashtable_message_in);
+		weechat_hashtable_free(hashtable_message_parse);
+
+		char* uhh = "";
+
 		//return text_final;
-		return "";
+		return uhh;
 	}
 	return NULL;
 }
@@ -213,6 +222,43 @@ int usernotice_signal_cb(const void *pointer,
 
 	weechat_printf(NULL, "Entered USERNOTICE; String == %s", signal_data);
 
+	struct t_hashtable *hashtable_message_in;
+	struct t_hashtable *hashtable_message_parse;
+
+	weechat_printf(NULL, "Creating weechat_hashtable_new");
+
+	hashtable_message_in = weechat_hashtable_new(8,
+	                                             WEECHAT_HASHTABLE_STRING,
+	                                             WEECHAT_HASHTABLE_STRING,
+	                                             NULL,
+	                                             NULL);
+	if (!hashtable_message_in) {
+		return WEECHAT_RC_ERROR;
+	}
+
+	weechat_printf(NULL, "Created hashtable_message_in");
+
+	weechat_hashtable_set(
+		hashtable_message_in,
+		"message",
+		signal_data
+	);
+
+	hashtable_message_parse = weechat_info_get_hashtable(
+		"irc_message_parse",
+		hashtable_message_in
+	);
+
+	if (!hashtable_message_parse) {
+		return WEECHAT_RC_ERROR;
+	}
+
+	weechat_printf(NULL, "Created hashtable_message_parse");
+
+	/* Let's remember to free our variables */
+	weechat_hashtable_free(hashtable_message_in);
+	weechat_hashtable_free(hashtable_message_parse);
+
 	return WEECHAT_RC_OK;
 }
 
@@ -222,15 +268,15 @@ int weechat_plugin_init(struct t_weechat_plugin *plugin,
 
 	weechat_plugin = plugin;
 
-	usernotice_hook = weechat_hook_modifier("irc_in_USERNOTICE",
-	                      &usernotice_modifier_cb,
-			      NULL,
-			      NULL);
-
-	//usernotice_hook = weechat_hook_signal("*,irc_in_USERNOTICE",
-	//                      &usernotice_signal_cb,
+	//usernotice_hook = weechat_hook_modifier("irc_in_USERNOTICE",
+	//                      &usernotice_modifier_cb,
 	//		      NULL,
 	//		      NULL);
+
+	usernotice_hook = weechat_hook_signal("*,irc_in_USERNOTICE",
+	                      &usernotice_signal_cb,
+			      NULL,
+			      NULL);
 
 	/**weechat_hook_command ("double",
 	*                    "Display two times a message "
