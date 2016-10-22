@@ -30,14 +30,10 @@ WEECHAT_PLUGIN_VERSION("0.1");
 WEECHAT_PLUGIN_LICENSE("GPL3");
 
 struct t_weechat_plugin *weechat_plugin = NULL;
-struct t_hook *usernotice_hook = NULL;
+struct t_hook *hook_usernotice = NULL;
+struct t_hook *hook_clearchat = NULL;
 
-char* usernotice_modifier_cb(const void *pointer,
-                             void *data,
-                             const char *modifier,
-                             const char *modifier_data,
-                             const char *string) {
-
+struct t_hashtable *hashtable_get_message_parse(const char *string) {
 	if (!string) {
 		return NULL;
 	}
@@ -74,6 +70,84 @@ char* usernotice_modifier_cb(const void *pointer,
 		return NULL;
 	}
 
+	return hashtable_message_parse;
+}
+
+char* cb_modifier_clearchat(const void *pointer,
+                            void *data,
+                            const char *modifier,
+                            const char *modifier_data,
+                            const char *string) {
+
+	struct t_hashtable *hashtable_message_parse = hashtable_get_message_parse(string);
+
+	if (!hashtable_message_parse) {
+		return NULL;
+	}
+
+	/* Server Name should be in modifier_data */
+	int length_server = strlen(modifier_data);
+	/* Increment by 1 to include \0 */
+	char *string_server = weechat_strndup(modifier_data, length_server + 1);
+
+	if (!weechat_hashtable_has_key(hashtable_message_parse, "channel")) {
+		return NULL;
+	}
+
+	weechat_printf(NULL, "Server: %s", string_server);
+
+	int length_channel = strlen(weechat_hashtable_get(hashtable_message_parse, "channel"));
+	char *string_channel = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "channel"), length_channel + 1);
+
+	weechat_printf(NULL, "Channel: %s", string_channel);
+
+	/* These messages have the user clearing the chat stored in text */
+	if (!weechat_hashtable_has_key(hashtable_message_parse, "text")) {
+		return NULL;
+	}
+
+	int length_user = strlen(weechat_hashtable_get(hashtable_message_parse, "text"));
+	char *string_user = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "text"), length_user + 1);
+
+	weechat_printf(NULL, "User: %s", string_user);
+
+	//FIXME
+	//weechat_printf(NULL, "hashtable_message_parse allocated successfully"
+
+	int count_tags;
+	char **tags;
+	if (weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
+		/* Tags should be seperated by ; */
+		tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"),
+		                            ";",
+		                            0,
+		                            0,
+		                            &count_tags
+		);
+	}
+
+	/* Stuff to Return
+	 * For some reason returning an empty string gets rid of the command not found message
+	 */
+
+	int length_return = 2;
+	char *result = malloc(length_return);
+	snprintf(result, length_return, "%s", "");
+	return result;
+}
+
+char* cb_modifier_usernotice(const void *pointer,
+                             void *data,
+                             const char *modifier,
+                             const char *modifier_data,
+                             const char *string) {
+
+	struct t_hashtable *hashtable_message_parse = hashtable_get_message_parse(string);
+
+	if (!hashtable_message_parse) {
+		return NULL;
+	}
+
 	/* Server Name should be in modifier_data */
 	int length_server = strlen(modifier_data);
 	/* Increment by 1 to include \0 */
@@ -100,7 +174,15 @@ char* usernotice_modifier_cb(const void *pointer,
 		return NULL;
 	}
 
-	struct t_gui_buffer *buffer_server = weechat_buffer_search(string_buffer_plugin, string_server_name);
+	char *string_server_prefix = "server.";
+	int length_server_prefix = strlen(string_server_prefix);
+
+	int length_server_full = length_server_prefix + length_server + 1;
+	char *string_server_full = calloc(length_server_full, sizeof(char));
+
+	/* Primary Server Buffer: irc.server.ZNC-Twitch */
+	snprintf(string_server_full, length_server_full, "%s%s", string_server_prefix, string_server_name);
+	struct t_gui_buffer *buffer_server = weechat_buffer_search(string_buffer_plugin, string_server_full);
 
 	if (!buffer_channel) {
 		return NULL;
@@ -217,7 +299,6 @@ char* usernotice_modifier_cb(const void *pointer,
 	free(string_server_name);
 	free(string_channel_name);
 	weechat_hashtable_free(hashtable_message_parse);
-	weechat_hashtable_free(hashtable_message_in);
 
 	/* Stuff to Return
 	 * For some reason returning an empty string gets rid of the command not found message
@@ -235,10 +316,15 @@ int weechat_plugin_init(struct t_weechat_plugin *plugin,
 
 	weechat_plugin = plugin;
 
-	usernotice_hook = weechat_hook_modifier("irc_in_USERNOTICE",
-	                                        &usernotice_modifier_cb,
+	hook_usernotice = weechat_hook_modifier("irc_in_USERNOTICE",
+	                                        &cb_modifier_usernotice,
 	                                        NULL,
 	                                        NULL);
+
+	hook_clearchat = weechat_hook_modifier("irc_in_CLEARCHAT",
+	                                       &cb_modifier_clearchat,
+	                                       NULL,
+	                                       NULL);
 
 	return WEECHAT_RC_OK;
 }
@@ -247,9 +333,9 @@ int weechat_plugin_end (struct t_weechat_plugin *plugin) {
 	/* make C compiler happy */
 	(void) plugin;
 
-	if(usernotice_hook) {
-		weechat_unhook(usernotice_hook);
-		usernotice_hook = NULL;
+	if(hook_usernotice) {
+		weechat_unhook(hook_usernotice);
+		hook_usernotice = NULL;
 	}
 
 	return WEECHAT_RC_OK;
