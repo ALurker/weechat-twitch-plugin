@@ -208,10 +208,58 @@ int usernotice_signal_cb(const void *pointer,
 	weechat_printf(NULL, "Entered USERNOTICE");
 
 	if (!signal_data) {
+		weechat_printf(NULL, "Error: No signal_data");
 		return WEECHAT_RC_ERROR;
 	}
 
 	weechat_printf(NULL, "Entered USERNOTICE; String == %s", signal_data);
+
+	struct t_hashtable *hashtable_message_in;
+	struct t_hashtable *hashtable_message_parse;
+
+	weechat_printf(NULL, "Creating hashtable_message_in");
+
+	hashtable_message_in = weechat_hashtable_new(8,
+	                                             WEECHAT_HASHTABLE_STRING,
+	                                             WEECHAT_HASHTABLE_STRING,
+	                                             NULL,
+	                                             NULL);
+
+	if (!hashtable_message_in) {
+		weechat_printf(NULL, "Error: No hashtable_message_in");
+		return WEECHAT_RC_ERROR;
+	}
+
+	weechat_printf(NULL, "Created hashtable_message_in");
+
+	weechat_hashtable_set(
+		hashtable_message_in,
+		"message",
+		signal_data
+	);
+
+	if (weechat_hashtable_has_key(hashtable_message_in, "message")) {
+		weechat_printf(NULL, "Message in hashtable_message_in");
+	}
+
+	weechat_printf(NULL, "Creating hashtable_message_parse");
+
+	hashtable_message_parse = weechat_info_get_hashtable(
+		"irc_message_parse",
+		hashtable_message_in
+	);
+	
+	if (!hashtable_message_parse) {
+		weechat_printf(NULL, "Error: No hashtable_message_parse");
+		return WEECHAT_RC_ERROR;
+	}
+
+	weechat_printf(NULL, "Created hashtable_message_parse");
+
+	weechat_hashtable_free(hashtable_message_in);
+	weechat_hashtable_free(hashtable_message_parse);
+
+	weechat_printf(NULL, "Freed the hashtables");
 
 	return WEECHAT_RC_OK;
 }
@@ -222,15 +270,15 @@ int weechat_plugin_init(struct t_weechat_plugin *plugin,
 
 	weechat_plugin = plugin;
 
-	usernotice_hook = weechat_hook_modifier("irc_in_USERNOTICE",
-	                      &usernotice_modifier_cb,
-			      NULL,
-			      NULL);
-
-	//usernotice_hook = weechat_hook_signal("*,irc_in_USERNOTICE",
-	//                      &usernotice_signal_cb,
+	//usernotice_hook = weechat_hook_modifier("irc_in_USERNOTICE",
+	//                      &usernotice_modifier_cb,
 	//		      NULL,
 	//		      NULL);
+
+	usernotice_hook = weechat_hook_signal("*,irc_in_USERNOTICE",
+	                      &usernotice_signal_cb,
+			      NULL,
+			      NULL);
 
 	/**weechat_hook_command ("double",
 	*                    "Display two times a message "
