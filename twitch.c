@@ -44,15 +44,22 @@ char* usernotice_modifier_cb(const void *pointer,
                              const char *modifier,
                              const char *modifier_data,
                              const char *string) {
+
+	weechat_printf(NULL, "Entered USERNOTICE");
+
 	if (!string) {
 		return NULL;
 	}
 
-	const char *color_prefix_network = weechat_color("chat_prefix_network");
-	const char *color_chat = weechat_color("chat");
+	weechat_printf(NULL, "Entered USERNOTICE; String != NULL");
+
+	//char *color_prefix_network = weechat_color("chat_prefix_network");
+	//char *color_chat = weechat_color("chat");
 
 	struct t_hashtable *hashtable_message_in;
 	struct t_hashtable *hashtable_message_parse;
+
+	weechat_printf(NULL, "Creating weechat_hashtable_new");
 
 	hashtable_message_in = weechat_hashtable_new(8,
 	                                             WEECHAT_HASHTABLE_STRING,
@@ -63,6 +70,9 @@ char* usernotice_modifier_cb(const void *pointer,
 	if (!hashtable_message_in) {
 		return NULL;
 	}
+
+	weechat_printf(NULL, "Created weechat_hashtable_new");
+
 	weechat_hashtable_set(
 		hashtable_message_in,
 		"message",
@@ -76,7 +86,7 @@ char* usernotice_modifier_cb(const void *pointer,
 	/* irc_in_USERNOTICE will have servername in modifier_data */
 	int length_server_name = strlen(modifier_data);
 
-	const char *channel_name = weechat_hashtable_get_string(
+	char *channel_name = weechat_hashtable_get(
 		hashtable_message_parse,
 		"channel"
 	);
@@ -94,10 +104,11 @@ char* usernotice_modifier_cb(const void *pointer,
 	free(string_buffer);
 
 	if (weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
+		weechat_printf(NULL, "tags exists");
 		int count_tags;
 		char **tags;
 		tags = weechat_string_split(
-			weechat_hashtable_get_string(
+			weechat_hashtable_get(
 				hashtable_message_parse,
 				"tags"
 			),
@@ -122,9 +133,11 @@ char* usernotice_modifier_cb(const void *pointer,
 				i = count_tags;
 			}
 		}
+		weechat_printf(NULL, "Checking sys_msg");
 		if (!sys_msg) {
 			return NULL;
 		}
+		weechat_printf(NULL, "sys_msg exists");
 		char *sys_msg_readable = weechat_string_replace(sys_msg[1], "\\s", " ");
 		weechat_string_free_split(sys_msg);
 		weechat_string_free_split(tags);
@@ -133,15 +146,13 @@ char* usernotice_modifier_cb(const void *pointer,
 		if (weechat_hashtable_has_key(hashtable_message_parse, "text")) {
 			char *comment = " [Comment] ";
 			int length_comment = strlen(comment);
-			const char *text = weechat_hashtable_get_string(
+			char *text = weechat_hashtable_get(
 				hashtable_message_parse,
 				"text"
 			);
 			int length_text = strlen(text);
-			int length_full = length_comment + length_text;
-			length_full = length_full + strlen(sys_msg_readable);
-			length_full++;
-			char *text_buffer = calloc(length_full, sizeof(char));
+			int length_full = length_comment + length_text + strlen(sys_msg_readable) + 1;
+			text_buffer = calloc(length_full, sizeof(char));
 			snprintf(text_buffer,
 				length_full,
 				"%s%s%s",
@@ -149,50 +160,61 @@ char* usernotice_modifier_cb(const void *pointer,
 				comment,
 				text
 			);
+		} else {
+			weechat_printf(NULL, "No \"text\" in message_parse");
 		}
+		weechat_printf(NULL, "checking text_buffer");
 		if (!text_buffer) {
 			return NULL;
 		}
+		weechat_printf(NULL, "text_buffer exists");
+
+		int length_cpn = strlen(weechat_color("chat_prefix_network"));
+		int length_chat = strlen(weechat_color("chat"));
+		int length_text = strlen(text_buffer);
+
+		int length_final = length_cpn + length_chat + length_text + 1;
+		char *text_final = calloc(length_final, sizeof(char));
+		snprintf(text_final,
+		         length_final,
+		         "%s--%s %s",
+		         weechat_color("chat_prefix_network"),
+		         weechat_color("chat"),
+		         text_buffer
+		);
 
 		weechat_printf(
 			buffer_irc,
-			"%s--%s %s",
-			color_prefix_network,
-			color_chat,
-			text_buffer
+			"%s",
+			text_final
 		);
 
 		/* After Use */
 		free(sys_msg_readable);
 		free(text_buffer);
-	}
 
-	return "";
+		//return text_final;
+		return "";
+	}
+	return NULL;
 }
 
-/* callback for command "/double" */
+int usernotice_signal_cb(const void *pointer,
+                         void *data,
+                         const char *signal,
+                         const char *type_data,
+                         void *signal_data) {
 
-/**
-  * int
-  * command_double_cb (const void *pointer, void *data,
-  *                    struct t_gui_buffer *buffer,
-  *                    int argc, char **argv, char **argv_eol)
-  * {
-  *     // make C compiler happy
-  *     (void) data;
-  *     (void) buffer;
-  *     (void) argv;
-  * 
-  *     if (argc > 1)
-  *     {
-  *         weechat_command (NULL, argv_eol[1]);
-  *         weechat_command (NULL, argv_eol[1]);
-  *     }
-  * 
-  *     return WEECHAT_RC_OK;
-  * }
-  * 
-  **/
+	weechat_printf(NULL, "Entered USERNOTICE");
+
+	if (!signal_data) {
+		return WEECHAT_RC_ERROR;
+	}
+
+	weechat_printf(NULL, "Entered USERNOTICE; String == %s", signal_data);
+
+	return WEECHAT_RC_OK;
+}
 
 int weechat_plugin_init(struct t_weechat_plugin *plugin,
 	                int argc,
@@ -205,6 +227,10 @@ int weechat_plugin_init(struct t_weechat_plugin *plugin,
 			      NULL,
 			      NULL);
 
+	//usernotice_hook = weechat_hook_signal("*,irc_in_USERNOTICE",
+	//                      &usernotice_signal_cb,
+	//		      NULL,
+	//		      NULL);
 
 	/**weechat_hook_command ("double",
 	*                    "Display two times a message "
