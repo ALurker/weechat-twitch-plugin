@@ -70,6 +70,8 @@ struct t_hashtable *hashtable_get_message_parse(const char *string) {
 		return NULL;
 	}
 
+	weechat_hashtable_free(hashtable_message_in);
+
 	return hashtable_message_parse;
 }
 
@@ -87,21 +89,30 @@ char* cb_modifier_clearchat(const void *pointer,
 
 	/* Server Name should be in modifier_data */
 	int length_server = strlen(modifier_data);
-	/* Increment by 1 to include \0 */
-	char *string_server = weechat_strndup(modifier_data, length_server + 1);
+	
+	/* Increment by 1 to include \0
+	 * API refernce documentation doesn't inclue the +1 incrementation
+	 * Assuming not necessary
+	 */
+
+	char *string_server = weechat_strndup(modifier_data, length_server);
 
 	if (!weechat_hashtable_has_key(hashtable_message_parse, "channel")) {
 		return NULL;
 	}
 
-	weechat_printf(NULL, "Server: %s", string_server);
+	//weechat_printf(NULL, "");
+	//weechat_printf(NULL, "Server: %s", string_server);
 
 	int length_channel = strlen(weechat_hashtable_get(hashtable_message_parse, "channel"));
 	char *string_channel = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "channel"), length_channel + 1);
 
-	weechat_printf(NULL, "Channel: %s", string_channel);
+	//weechat_printf(NULL, "Channel: %s", string_channel);
 
-	/* These messages have the user clearing the chat stored in text */
+	/* These messages have the user whose message is cleared in text
+	 * No user present implies everybodies chat was cleared
+	 */
+
 	if (!weechat_hashtable_has_key(hashtable_message_parse, "text")) {
 		return NULL;
 	}
@@ -109,7 +120,8 @@ char* cb_modifier_clearchat(const void *pointer,
 	int length_user = strlen(weechat_hashtable_get(hashtable_message_parse, "text"));
 	char *string_user = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "text"), length_user + 1);
 
-	weechat_printf(NULL, "User: %s", string_user);
+	//weechat_printf(NULL, "Length User: %d", length_user);
+	//weechat_printf(NULL, "User: %s", string_user);
 
 	/* Get the Channel Buffer */
 	char *string_buffer_plugin = "irc";
@@ -125,29 +137,193 @@ char* cb_modifier_clearchat(const void *pointer,
 	/* Get the Server Buffer */
 	char *string_server_prefix = "server.";
 	int length_server_prefix = strlen(string_server_prefix);
-	int length_buffer_server = length_server + length_server_prefix + 1;
-	char *string_buffer_server = calloc(length_buffer_server, sizeof(char));
-	snprintf(string_buffer_server, length_buffer_server, "%s%s", string_server_prefix, string_server);
-	struct t_gui_buffer *buffer_server = weechat_buffer_search(string_buffer_plugin, string_buffer_channel);
+	int length_buffer_server = length_server + length_server_prefix;
+	char *string_buffer_server = calloc(length_buffer_server + 1, sizeof(char));
+	snprintf(string_buffer_server, length_buffer_server + 1, "%s%s", string_server_prefix, string_server);
+	//weechat_printf(NULL, "String Buffer Server: %s", string_buffer_server);
+	struct t_gui_buffer *buffer_server = weechat_buffer_search(string_buffer_plugin, string_buffer_server);
 
 	if (!buffer_server) {
 		return NULL;
 	}
 
-	int count_tags;
+	int count_tags = 0;
 	char **tags;
-	if (weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
-		/* Tags should be seperated by ; */
-		tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"),
-		                            ";",
-		                            0,
-		                            0,
-		                            &count_tags
-		);
+	if (!weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
+		return NULL;
+	}
+	/* Tags should be seperated by ; */
+	tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"),
+				    ";",
+				    0,
+				    0,
+				    &count_tags
+	);
+
+	int count_ban_reason = 0;
+	char **ban_reason_array;
+	int count_ban_duration = 0;
+	char **ban_duration_array;
+	for (int i = 0; i < count_tags; i++) {
+		if (weechat_string_match(tags[i], "ban-reason=*", 1)) {
+			ban_reason_array = weechat_string_split(tags[i], "=", 0, 2, &count_ban_reason);
+		} else if (weechat_string_match(tags[i], "ban-duration=*", 1)) {
+			ban_duration_array = weechat_string_split(tags[i], "=", 0, 2, &count_ban_duration);
+		}
 	}
 
+	char *ban_reason;
+	int length_reason = 0;
+	char *ban_duration;
+	int length_duration = 0;
+	/* if tag present, but empty string, count will be one */
+	if (count_ban_reason > 1) {
+		ban_reason = weechat_string_replace(ban_reason_array[1], "\\s", " ");
+		length_reason = strlen(ban_reason);
+		//weechat_printf(NULL, "Ban Reason: %s", ban_reason);
+	}
+	if (count_ban_duration > 1) {
+		ban_duration = weechat_string_replace(ban_duration_array[1], "\\s", " ");
+		length_duration = strlen(ban_duration);
+		//weechat_printf(NULL, "Ban Duration: %s seconds", ban_duration);
+	}
+
+	/* ban_reason but no ban_duration => perm ban
+	 * ban_reason and ban_duration => timeout
+	 * not ban_reason but ban_duration => timeout
+	 * user but no ban_duration and no ban_reason => clear user chat
+	 * no_user => chat clear
+	 */
+
+	char *string_output;
+	int length_output = 0;
+	int length_prefix = strlen(weechat_prefix("network"));
+	char *string_prefix = weechat_strndup(weechat_prefix("network"), length_prefix);
+
+	if (length_user <= 0) {
+		/* No User => Clear Chat */
+		char *string_secondary = "Entire Chat Cleared by Moderator";
+		int length_secondary = strlen(string_secondary);
+		int length_final = length_secondary + length_output;
+		string_output = calloc(length_final + 1, sizeof(char));
+		snprintf(string_output, length_final + 1, "%s%s", string_prefix, string_secondary);
+	} else {
+		if (count_ban_reason > 1) {
+			if (count_ban_duration > 1) {
+				/* Timeout with Reason */
+				char *string_secondary = " has been timed out for ";
+				int length_secondary = strlen(string_secondary);
+				char *string_tertiary = " seconds. [Reason: ";
+				int length_tertiary = strlen(string_tertiary);
+				char *string_quaternary = "]";
+				int length_quaternary = strlen(string_quaternary);
+
+				length_output = length_prefix;
+				length_output += length_user;
+				length_output += length_secondary;
+				length_output += length_duration;
+				length_output += length_tertiary;
+				length_output += length_reason;
+				length_output += length_quaternary;
+
+				string_output = calloc(length_output + 1, sizeof(char));
+				snprintf(string_output,
+				         length_output + 1,
+				         "%s%s%s%s%s%s%s",
+				         string_prefix,
+				         string_user,
+				         string_secondary,
+				         ban_duration,
+				         string_tertiary,
+				         ban_reason,
+				         string_quaternary
+				);
+			} else {
+				/* Perm Ban */
+				char *string_secondary = " has been banned. [Reason: ";
+				int length_secondary = strlen(string_secondary);
+				char *string_tertiary = "]";
+				int length_tertiary = strlen(string_tertiary);
+
+				length_output = length_prefix;
+				length_output += length_user;
+				length_output += length_secondary;
+				length_output += length_reason;
+				length_output += length_tertiary;
+
+				string_output = calloc(length_output + 1, sizeof(char));
+				snprintf(string_output,
+				         length_output + 1,
+				         "%s%s%s%s%s",
+				         string_prefix,
+				         string_user,
+				         string_secondary,
+				         ban_reason,
+				         string_tertiary
+				);
+			}
+		} else {
+			if (count_ban_duration > 1) {
+				/* Timeout without Reason */
+				char *string_secondary = " has been timed out for ";
+				int length_secondary = strlen(string_secondary);
+				char *string_tertiary = " seconds.";
+				int length_tertiary = strlen(string_tertiary);
+
+				length_output = length_prefix;
+				length_output += length_user;
+				length_output += length_secondary;
+				length_output += length_duration;
+				length_output += length_tertiary;
+
+				string_output = calloc(length_output + 1, sizeof(char));
+				snprintf(string_output,
+				         length_output + 1,
+				         "%s%s%s%s%s",
+				         string_prefix,
+				         string_user,
+				         string_secondary,
+				         ban_duration,
+				         string_tertiary
+				);
+			} else {
+				/* Cleared User Chat */
+				char *string_secondary = "'s Chat Cleared by Moderator";
+				int length_secondary = strlen(string_secondary);
+
+				length_output = length_prefix;
+				length_output += length_user;
+				length_output += length_secondary;
+
+				string_output = calloc(length_output + 1, sizeof(char));
+				snprintf(string_output,
+				         length_output + 1,
+				         "%s%s%s",
+				         string_prefix,
+				         string_user,
+				         string_secondary
+				);
+			}
+		}
+	}
+
+	if (!string_output) {
+		return NULL;
+	}
+
+	weechat_printf(buffer_server, "%s", string_output);
+	weechat_printf(buffer_channel, "%s", string_output);
+	
 	/* Stuff to Free */
+	if (count_ban_reason > 1) {
+		free(ban_reason);
+	}
+	if (count_ban_duration > 1) {
+		free(ban_duration);
+	}
 	free(string_buffer_channel);
+	free(string_output);
+	free(string_prefix);
 	weechat_hashtable_free(hashtable_message_parse);
 
 	/* Stuff to Return
@@ -207,7 +383,7 @@ char* cb_modifier_usernotice(const void *pointer,
 	snprintf(string_server_full, length_server_full, "%s%s", string_server_prefix, string_server_name);
 	struct t_gui_buffer *buffer_server = weechat_buffer_search(string_buffer_plugin, string_server_full);
 
-	if (!buffer_channel) {
+	if (!buffer_server) {
 		return NULL;
 	}
 
