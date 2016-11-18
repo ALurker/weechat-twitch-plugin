@@ -23,6 +23,9 @@
 
 #include "weechat-plugin.h"
 
+#include "twitch.h"
+#include "twitch-plugin.h"
+
 WEECHAT_PLUGIN_NAME("twitch");
 WEECHAT_PLUGIN_DESCRIPTION("Twitch plugin for WeeChat");
 WEECHAT_PLUGIN_AUTHOR("ALurker <ALurker@outlook.com>");
@@ -34,118 +37,6 @@ struct t_hook *hook_usernotice = NULL;
 struct t_hook *hook_clearchat = NULL;
 struct t_hook *hook_roomstate = NULL;
 
-/* NOTE: must run free on the return value when done */
-char *string_parse_tag(char *tag) {
-	int count_tag = 0;
-	char **array_string_tag = weechat_string_split(tag, "=", 0, 2, &count_tag);
-
-	int length_contents;
-	char *string_contents;
-	if (count_tag > 1) {
-		length_contents = strlen(array_string_tag[1]);
-		string_contents = weechat_strndup(array_string_tag[1], length_contents);
-	} else {
-		length_contents = 0;
-		string_contents = calloc(length_contents + 1, sizeof(char));
-		snprintf(string_contents, length_contents + 1, "%s", "");
-	}
-
-	weechat_string_free_split(array_string_tag);
-	return string_contents;
-}
-
-/* NOTE: must run free on the return value when done */
-char *get_channel_name(struct t_hashtable *hashtable) {
-	if (!weechat_hashtable_has_key(hashtable, "channel")) {
-		return NULL;
-	}
-
-	int length_channel = strlen(weechat_hashtable_get(hashtable, "channel"));
-	return weechat_strndup(weechat_hashtable_get(hashtable, "channel"), length_channel + 1);
-}
-
-struct t_hashtable *hashtable_get_message_parse(const char *string) {
-	if (!string) {
-		return NULL;
-	}
-
-	struct t_hashtable *hashtable_message_in;
-	struct t_hashtable *hashtable_message_parse;
-
-	hashtable_message_in = weechat_hashtable_new(8,
-	                                             WEECHAT_HASHTABLE_STRING,
-	                                             WEECHAT_HASHTABLE_STRING,
-	                                             NULL,
-	                                             NULL);
-
-	if (!hashtable_message_in) {
-		return NULL;
-	}
-
-	weechat_hashtable_set(
-		hashtable_message_in,
-		"message",
-		string
-	);
-
-	if (!weechat_hashtable_has_key(hashtable_message_in, "message")) {
-		return NULL;
-	}
-
-	hashtable_message_parse = weechat_info_get_hashtable(
-		"irc_message_parse",
-		hashtable_message_in
-	);
-
-	if (!hashtable_message_parse) {
-		return NULL;
-	}
-
-	weechat_hashtable_free(hashtable_message_in);
-
-	return hashtable_message_parse;
-}
-
-/* Checks if a localvar is set.
- * Returns 1 if empty; else 0
- */
-int twitch_buffer_var_empty(struct t_gui_buffer *buffer, const char *localvar) {
-	int ret = 0;
-	if(!weechat_buffer_get_string(buffer, localvar)) {
-		ret = 1;
-	}
-	return ret;
-}
-
-/* Updates a buffer localvar if it is different
- */
-void twitch_buffer_update_local(struct t_gui_buffer *buffer, const char *var, const char *val) {
-	char *local = "localvar_";
-	char *local_set = "localvar_set_";
-
-	int length_local = strlen(local);
-	int length_local_set = strlen(local_set);
-	int length_var = strlen(var);
-
-	char *string_local = calloc(length_local + length_var + 1, sizeof(char));
-	snprintf(string_local, length_local + length_var + 1, "%s%s", local, var);
-
-	char *string_local_set = calloc(length_local_set + length_var + 1, sizeof(char));
-	snprintf(string_local_set, length_local_set + length_var + 1, "%s%s", local_set, var);
-
-	if(twitch_buffer_var_empty(buffer, string_local)) {
-		/* var is not defined */
-		weechat_buffer_set(buffer, string_local_set, val);
-	} else if(weechat_strcasecmp(weechat_buffer_get_string(buffer, string_local), val) != 0) {
-		/* var and val are different, update var */
-		weechat_buffer_set(buffer, string_local_set, val);
-	}
-
-	free(string_local);
-	free(string_local_set);
-	return;
-}
-
 char* cb_modifier_roomstate(const void *pointer,
                             void *data,
                             const char *modifier,
@@ -156,10 +47,8 @@ char* cb_modifier_roomstate(const void *pointer,
 	 * 15:23:44 --> ZNC-Tw+| @broadcaster-lang=;emote-only=0;r9k=0;slow=0;subs-only=0 :tmi.twitch.tv ROOMSTATE #day9tv                             
 	 */
 
-	struct t_hashtable *hashtable_message_parse = hashtable_get_message_parse(string);
+	struct t_hashtable *hashtable_message_parse = twitch_get_message(string);
 
-	//FIXME
-	weechat_printf(NULL, "Entered Roomstate Function");
 	if (!weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
 		weechat_printf(NULL, "No Tags in hashtable_message_parse");
 		return NULL;
@@ -172,7 +61,7 @@ char* cb_modifier_roomstate(const void *pointer,
 	char *string_server = calloc(length_server + 1, sizeof(char));
 	snprintf(string_server, length_server + 1, "%s", modifier_data);
 
-	char *string_channel = get_channel_name(hashtable_message_parse);
+	char *string_channel = twitch_get_channel(hashtable_message_parse);
 	int length_channel = strlen(string_channel);
 
 	/* Include the +1 below for the period between server and channel */
@@ -208,29 +97,29 @@ char* cb_modifier_roomstate(const void *pointer,
 			/* Assign Language to string_language
 			 * "" => en
 			 */
-			string_language = string_parse_tag(tags[i]);
+			string_language = twitch_parse_tag(tags[i]);
 		} else if (weechat_string_match(tags[i], "emote-only=*", 1)) {
 			/* Assign Emote Only to string_emote
 			 * Valid should be 0 => False, 1 => True
 			 */
-			string_emote = string_parse_tag(tags[i]);
+			string_emote = twitch_parse_tag(tags[i]);
 		} else if (weechat_string_match(tags[i], "r9k=*", 1)) {
 			/* Assign r9k value to string_r9k
 			 * TODO research what this value actually means
 			 */
-			string_r9k = string_parse_tag(tags[i]);
+			string_r9k = twitch_parse_tag(tags[i]);
 		} else if (weechat_string_match(tags[i], "slow=*", 1)) {
 			/* Assign slow value to string_slow
 			 * I'm given to understanding that different values
 			 * mean different levels of slow.
 			 * TODO research on the possible values here
 			 */
-			string_slow = string_parse_tag(tags[i]);
+			string_slow = twitch_parse_tag(tags[i]);
 		} else if (weechat_string_match(tags[i], "subs-only=*", 1)) {
 			/* Assign subs-only value to string_subs
 			 * 0 => False, 1 => True
 			 */
-			string_subs = string_parse_tag(tags[i]);
+			string_subs = twitch_parse_tag(tags[i]);
 		}
 	}
 
@@ -289,7 +178,7 @@ char* cb_modifier_clearchat(const void *pointer,
                             const char *modifier_data,
                             const char *string) {
 
-	struct t_hashtable *hashtable_message_parse = hashtable_get_message_parse(string);
+	struct t_hashtable *hashtable_message_parse = twitch_get_message(string);
 
 	if (!hashtable_message_parse) {
 		return NULL;
@@ -578,7 +467,7 @@ char* cb_modifier_usernotice(const void *pointer,
                              const char *modifier_data,
                              const char *string) {
 
-	struct t_hashtable *hashtable_message_parse = hashtable_get_message_parse(string);
+	struct t_hashtable *hashtable_message_parse = twitch_get_message(string);
 
 	if (!hashtable_message_parse) {
 		return NULL;
