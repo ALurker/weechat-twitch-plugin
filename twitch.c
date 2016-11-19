@@ -186,30 +186,17 @@ char* cb_modifier_clearchat(const void *pointer,
 
 	/* Server Name should be in modifier_data */
 	int length_server = strlen(modifier_data);
-	
-	/* Increment by 1 to include \0
-	 * API refernce documentation doesn't inclue the +1 incrementation
-	 * Assuming not necessary
-	 */
-
 	char *string_server = weechat_strndup(modifier_data, length_server);
 
-	if (!weechat_hashtable_has_key(hashtable_message_parse, "channel")) {
+	char *string_channel = twitch_get_channel(hashtable_message_parse);
+	if (!string_channel) {
 		return NULL;
 	}
-
-	//weechat_printf(NULL, "");
-	//weechat_printf(NULL, "Server: %s", string_server);
-
-	int length_channel = strlen(weechat_hashtable_get(hashtable_message_parse, "channel"));
-	char *string_channel = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "channel"), length_channel + 1);
-
-	//weechat_printf(NULL, "Channel: %s", string_channel);
+	int length_channel = strlen(string_channel);
 
 	/* These messages have the user whose message is cleared in text
 	 * No user present implies everybodies chat was cleared
 	 */
-
 	if (!weechat_hashtable_has_key(hashtable_message_parse, "text")) {
 		return NULL;
 	}
@@ -302,12 +289,10 @@ char* cb_modifier_clearchat(const void *pointer,
 		char *string_primary = ": Entire Chat Cleared by Moderator";
 		int length_primary = strlen(string_primary);
 
-		length_output = length_prefix;
-		length_output += length_channel;
-		length_output += length_primary;
+		length_output = length_primary;
 
 		string_output = calloc(length_output + 1, sizeof(char));
-		snprintf(string_output, length_output + 1, "%s%s%s", string_prefix, string_channel, string_primary);
+		snprintf(string_output, length_output + 1, "%s", string_primary);
 	} else {
 		if (count_ban_reason > 1) {
 			if (count_ban_duration > 1) {
@@ -321,9 +306,7 @@ char* cb_modifier_clearchat(const void *pointer,
 				char *string_quaternary = "]";
 				int length_quaternary = strlen(string_quaternary);
 
-				length_output = length_prefix;
-				length_output += length_channel;
-				length_output += length_primary;
+				length_output = length_primary;
 				length_output += length_user;
 				length_output += length_secondary;
 				length_output += length_duration;
@@ -334,9 +317,7 @@ char* cb_modifier_clearchat(const void *pointer,
 				string_output = calloc(length_output + 1, sizeof(char));
 				snprintf(string_output,
 				         length_output + 1,
-				         "%s%s%s%s%s%s%s%s%s",
-				         string_prefix,
-					 string_channel,
+				         "%s%s%s%s%s%s%s",
 					 string_primary,
 				         string_user,
 				         string_secondary,
@@ -354,9 +335,7 @@ char* cb_modifier_clearchat(const void *pointer,
 				char *string_tertiary = "]";
 				int length_tertiary = strlen(string_tertiary);
 
-				length_output = length_prefix;
-				length_output += length_channel;
-				length_output += length_primary;
+				length_output = length_primary;
 				length_output += length_user;
 				length_output += length_secondary;
 				length_output += length_reason;
@@ -365,9 +344,7 @@ char* cb_modifier_clearchat(const void *pointer,
 				string_output = calloc(length_output + 1, sizeof(char));
 				snprintf(string_output,
 				         length_output + 1,
-				         "%s%s%s%s%s%s%s",
-				         string_prefix,
-					 string_channel,
+				         "%s%s%s%s%s",
 					 string_primary,
 				         string_user,
 				         string_secondary,
@@ -385,9 +362,7 @@ char* cb_modifier_clearchat(const void *pointer,
 				char *string_tertiary = " seconds.";
 				int length_tertiary = strlen(string_tertiary);
 
-				length_output = length_prefix;
-				length_output += length_channel;
-				length_output += length_primary;
+				length_output = length_primary;
 				length_output += length_user;
 				length_output += length_secondary;
 				length_output += length_duration;
@@ -396,9 +371,7 @@ char* cb_modifier_clearchat(const void *pointer,
 				string_output = calloc(length_output + 1, sizeof(char));
 				snprintf(string_output,
 				         length_output + 1,
-				         "%s%s%s%s%s%s%s",
-				         string_prefix,
-					 string_channel,
+				         "%s%s%s%s%s",
 					 string_primary,
 				         string_user,
 				         string_secondary,
@@ -412,18 +385,14 @@ char* cb_modifier_clearchat(const void *pointer,
 				char *string_secondary = "'s Chat Cleared by Moderator";
 				int length_secondary = strlen(string_secondary);
 
-				length_output = length_prefix;
-				length_output += length_channel;
-				length_output += length_primary;
+				length_output = length_primary;
 				length_output += length_user;
 				length_output += length_secondary;
 
 				string_output = calloc(length_output + 1, sizeof(char));
 				snprintf(string_output,
 				         length_output + 1,
-				         "%s%s%s%s%s",
-				         string_prefix,
-					 string_channel,
+				         "%s%s%s",
 					 string_primary,
 				         string_user,
 				         string_secondary
@@ -436,9 +405,20 @@ char* cb_modifier_clearchat(const void *pointer,
 		return NULL;
 	}
 
-	weechat_printf(buffer_server, "%s", string_output);
-	weechat_printf(buffer_channel, "%s", string_output);
+	weechat_printf(buffer_server, "%s%s%s", string_prefix, string_channel, string_output);
+	//FIXME
+	//weechat_printf(buffer_channel, "%s", string_output);
 	
+	char *string_hostname = twitch_hashtable_get_string(hashtable_message_parse, "host");
+	if (!string_hostname) {
+		return NULL;
+	}
+
+	char *string_privmsg = twitch_build_privmsg_extended("twitchnotify",
+	                                                     string_hostname,
+	                                                     string_channel,
+	                                                     string_output);
+
 	/* Stuff to Free */
 	if (count_ban_reason > 1) {
 		free(ban_reason);
@@ -446,19 +426,16 @@ char* cb_modifier_clearchat(const void *pointer,
 	if (count_ban_duration > 1) {
 		free(ban_duration);
 	}
+	free(string_hostname);
+	free(string_server);
+	free(string_channel);
+	free(string_user);
 	free(string_buffer_channel);
 	free(string_output);
 	free(string_prefix);
 	weechat_hashtable_free(hashtable_message_parse);
 
-	/* Stuff to Return
-	 * For some reason returning an empty string gets rid of the command not found message
-	 */
-
-	int length_return = 2;
-	char *result = malloc(length_return);
-	snprintf(result, length_return, "%s", "");
-	return result;
+	return string_privmsg;
 }
 
 char* cb_modifier_usernotice(const void *pointer,

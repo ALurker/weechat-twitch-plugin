@@ -57,12 +57,7 @@ char *twitch_parse_tag(char *tag) {
  * 	char *: The name of the channel
  */
 char *twitch_get_channel(struct t_hashtable *hashtable) {
-	if (!weechat_hashtable_has_key(hashtable, "channel")) {
-		return NULL;
-	}
-
-	int length_channel = strlen(weechat_hashtable_get(hashtable, "channel"));
-	return weechat_strndup(weechat_hashtable_get(hashtable, "channel"), length_channel + 1);
+	return twitch_hashtable_get_string(hashtable, "channel");
 }
 
 /* Turns a message string into a hashtable format
@@ -113,6 +108,29 @@ struct t_hashtable *twitch_get_message(const char *string) {
 	return hashtable_message_parse;
 }
 
+/* Allocates space and returns a string containing the data
+ * in a hashtable.
+ * Input:
+ * 	t_hashtable *hashtable: The hashtable to get the value from
+ * 	char *key: The key to grab the value of
+ * Return: free() after use, NULL on error
+ * 	char *val: The value in the key
+ */
+char *twitch_hashtable_get_string(struct t_hashtable *hashtable, const char *key) {
+	if(!weechat_hashtable_has_key(hashtable, key)) {
+		return NULL;
+	}
+	int *plength_val = malloc(sizeof(int));
+	*plength_val = strlen(weechat_hashtable_get(hashtable, key));
+
+	/* API documentation doesn't include a +1 for the \0 char,
+	 * assuming not necessary
+	 */
+	char *pval = weechat_strndup(weechat_hashtable_get(hashtable, key), *plength_val);
+	free(plength_val);
+	return pval;
+}
+
 /* Checks if a localvar is set within a buffer
  * Input:
  * 	t_gui_buffer *buffer: The buffer to check
@@ -161,4 +179,84 @@ void twitch_buffer_update_local(struct t_gui_buffer *buffer, const char *var, co
 	free(string_local);
 	free(string_local_set);
 	return;
+}
+
+/* Builds a custom privmsg message when there isn't a given user
+ * Input:
+ * 	char *user: The user to masquarade as
+ * 	char *host: The full host the message comes from
+ * 	char *channel: The channel to receive the message on
+ * 	char *message: The message to display
+ * Return:
+ * 	char *full_message: The entire IRC PRIVMSG
+ */
+char *twitch_build_privmsg_extended(const char *user, const char *host, const char *channel, const char *message) {
+	int length_user = strlen(user);
+	int length_host = strlen(host);
+
+	char *exclamation = "!";
+	int length_exclamation = strlen(exclamation);
+	char *at = "@";
+	int length_at = strlen(at);
+
+	int length_new_host = length_user + length_exclamation;
+	length_new_host += length_user;
+	length_new_host += length_at;
+	length_new_host += length_host;
+
+	char *new_host = calloc(length_new_host + 1, sizeof(char));
+	snprintf(new_host,
+	         length_new_host + 1,
+	         "%s%s%s%s%s",
+	         user,
+	         exclamation,
+	         user,
+	         at,
+	         host);
+
+	char *full_message = twitch_build_privmsg(new_host, channel, message);
+	free(new_host);
+	return full_message;
+}
+
+/* Builds a custom privmsg message
+ * Input:
+ * 	char *host: The full host the message comes from
+ * 	char *channel: The channel to receive the message on
+ * 	char *message: The message to display
+ * Return:
+ * 	char *full_message: The entire IRC PRIVMSG
+ */
+char *twitch_build_privmsg(const char *host, const char *channel, const char *message) {
+	int length_host = strlen(host);
+	int length_channel = strlen(channel);
+	int length_message = strlen(message);
+
+	char *colon = ":";
+	int length_colon = strlen(colon);
+	char *space = " ";
+	int length_space = strlen(space);
+
+	char *priv = " PRIVMSG ";
+	int length_priv = strlen(priv);
+
+	int length_full_message = length_colon + length_host;
+	length_full_message += length_priv;
+	length_full_message += length_channel;
+	length_full_message += length_space;
+	length_full_message += length_colon;
+	length_full_message += length_message;
+
+	char *full_message = calloc(length_full_message + 1, sizeof(char));
+	snprintf(full_message,
+	         length_full_message + 1,
+	         "%s%s%s%s%s%s%s",
+	         colon,
+	         host,
+	         priv,
+	         channel,
+	         space,
+	         colon,
+	         message);
+	return full_message;
 }
