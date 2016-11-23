@@ -22,6 +22,8 @@
 
 extern char *twitch_parse_tag(char *tag);
 extern char *twitch_get_channel(struct t_hashtable *hashtable);
+extern struct t_gui_buffer *twitch_get_channel_buffer(const char *channel, const char *server);
+extern struct t_gui_buffer *twitch_get_server_buffer(const char *server);
 
 extern struct t_hashtable *twitch_get_message(const char *string);
 extern char *twitch_hashtable_get_string(struct t_hashtable *hashtable, const char *key);
@@ -31,5 +33,6 @@ extern void twitch_buffer_update_local(struct t_gui_buffer *buffer, const char *
 
 extern char *twitch_build_privmsg_extended(const char *user, const char *host, const char *channel, const char *message);
 extern char *twitch_build_privmsg(const char *host, const char *channel, const char *message);
+extern char *twitch_build_notice_channel(const char *host, const char *channel, const char *message);
 
 #endif /* TWITCH_PLUGIN_H */

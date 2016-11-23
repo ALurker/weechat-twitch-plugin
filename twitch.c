@@ -45,6 +45,10 @@ char* cb_modifier_roomstate(const void *pointer,
 	/* Example Message:
 	 * 15:23:44 --> ZNC-Tw+| @badges=;color=;display-name=TheRealLurker;emote-sets=0;mod=0;subscriber=0;user-type= :tmi.twitch.tv USERSTATE #day9tv
 	 * 15:23:44 --> ZNC-Tw+| @broadcaster-lang=;emote-only=0;r9k=0;slow=0;subs-only=0 :tmi.twitch.tv ROOMSTATE #day9tv                             
+	 *
+	 * TODO: Transition over to NOTICE
+	 * Example:
+	 * @msg-id=subs_off :tmi.twitch.tv NOTICE #day9tv :This room is no longer in subscribers-only mode
 	 */
 
 	struct t_hashtable *hashtable_message_parse = twitch_get_message(string);
@@ -286,7 +290,7 @@ char* cb_modifier_clearchat(const void *pointer,
 
 	if (length_user <= 0) {
 		/* No User => Clear Chat */
-		char *string_primary = ": Entire Chat Cleared by Moderator";
+		char *string_primary = "Entire Chat Cleared by Moderator";
 		int length_primary = strlen(string_primary);
 
 		length_output = length_primary;
@@ -297,46 +301,16 @@ char* cb_modifier_clearchat(const void *pointer,
 		if (count_ban_reason > 1) {
 			if (count_ban_duration > 1) {
 				/* Timeout with Reason */
-				char *string_primary = ": ";
+				char *string_primary = " has been timed out for ";
 				int length_primary = strlen(string_primary);
-				char *string_secondary = " has been timed out for ";
-				int length_secondary = strlen(string_secondary);
-				char *string_tertiary = " seconds. [Reason: ";
-				int length_tertiary = strlen(string_tertiary);
-				char *string_quaternary = "]";
-				int length_quaternary = strlen(string_quaternary);
-
-				length_output = length_primary;
-				length_output += length_user;
-				length_output += length_secondary;
-				length_output += length_duration;
-				length_output += length_tertiary;
-				length_output += length_reason;
-				length_output += length_quaternary;
-
-				string_output = calloc(length_output + 1, sizeof(char));
-				snprintf(string_output,
-				         length_output + 1,
-				         "%s%s%s%s%s%s%s",
-					 string_primary,
-				         string_user,
-				         string_secondary,
-				         ban_duration,
-				         string_tertiary,
-				         ban_reason,
-				         string_quaternary
-				);
-			} else {
-				/* Perm Ban */
-				char *string_primary = ": ";
-				int length_primary = strlen(string_primary);
-				char *string_secondary = " has been banned. [Reason: ";
+				char *string_secondary = " seconds. [Reason: ";
 				int length_secondary = strlen(string_secondary);
 				char *string_tertiary = "]";
 				int length_tertiary = strlen(string_tertiary);
 
-				length_output = length_primary;
-				length_output += length_user;
+				length_output = length_user;
+				length_output += length_primary;
+				length_output += length_duration;
 				length_output += length_secondary;
 				length_output += length_reason;
 				length_output += length_tertiary;
@@ -344,58 +318,72 @@ char* cb_modifier_clearchat(const void *pointer,
 				string_output = calloc(length_output + 1, sizeof(char));
 				snprintf(string_output,
 				         length_output + 1,
-				         "%s%s%s%s%s",
-					 string_primary,
+				         "%s%s%s%s%s%s",
 				         string_user,
+					 string_primary,
+				         ban_duration,
 				         string_secondary,
 				         ban_reason,
 				         string_tertiary
+				);
+			} else {
+				/* Perm Ban */
+				char *string_primary = " has been banned. [Reason: ";
+				int length_primary = strlen(string_primary);
+				char *string_secondary = "]";
+				int length_secondary = strlen(string_secondary);
+
+				length_output = length_user;
+				length_output += length_primary;
+				length_output += length_reason;
+				length_output += length_secondary;
+
+				string_output = calloc(length_output + 1, sizeof(char));
+				snprintf(string_output,
+				         length_output + 1,
+				         "%s%s%s%s",
+				         string_user,
+					 string_primary,
+				         ban_reason,
+				         string_secondary
 				);
 			}
 		} else {
 			if (count_ban_duration > 1) {
 				/* Timeout without Reason */
-				char *string_primary = ": ";
+				char *string_primary = " has been timed out for ";
 				int length_primary = strlen(string_primary);
-				char *string_secondary = " has been timed out for ";
+				char *string_secondary = " seconds.";
 				int length_secondary = strlen(string_secondary);
-				char *string_tertiary = " seconds.";
-				int length_tertiary = strlen(string_tertiary);
 
-				length_output = length_primary;
-				length_output += length_user;
-				length_output += length_secondary;
+				length_output = length_user;
+				length_output += length_primary;
 				length_output += length_duration;
-				length_output += length_tertiary;
+				length_output += length_secondary;
 
 				string_output = calloc(length_output + 1, sizeof(char));
 				snprintf(string_output,
 				         length_output + 1,
-				         "%s%s%s%s%s",
-					 string_primary,
+				         "%s%s%s%s",
 				         string_user,
-				         string_secondary,
+					 string_primary,
 				         ban_duration,
-				         string_tertiary
+				         string_secondary
 				);
 			} else {
 				/* Cleared User Chat */
-				char *string_primary = ": ";
+				char *string_primary = "'s Chat Cleared by Moderator";
 				int length_primary = strlen(string_primary);
-				char *string_secondary = "'s Chat Cleared by Moderator";
-				int length_secondary = strlen(string_secondary);
 
-				length_output = length_primary;
-				length_output += length_user;
-				length_output += length_secondary;
+				length_output = length_user;
+				length_output += length_primary;
 
 				string_output = calloc(length_output + 1, sizeof(char));
 				snprintf(string_output,
 				         length_output + 1,
-				         "%s%s%s",
-					 string_primary,
+				         "%s%s",
 				         string_user,
-				         string_secondary
+				         string_primary
 				);
 			}
 		}
@@ -405,19 +393,16 @@ char* cb_modifier_clearchat(const void *pointer,
 		return NULL;
 	}
 
-	weechat_printf(buffer_server, "%s%s%s", string_prefix, string_channel, string_output);
-	//FIXME
-	//weechat_printf(buffer_channel, "%s", string_output);
+	weechat_printf(buffer_server, "%s%s: %s", string_prefix, string_channel, string_output);
 	
 	char *string_hostname = twitch_hashtable_get_string(hashtable_message_parse, "host");
 	if (!string_hostname) {
 		return NULL;
 	}
 
-	char *string_privmsg = twitch_build_privmsg_extended("twitchnotify",
-	                                                     string_hostname,
-	                                                     string_channel,
-	                                                     string_output);
+	char *string_notice = twitch_build_notice_channel(string_hostname,
+	                                                  string_channel,
+	                                                  string_output);
 
 	/* Stuff to Free */
 	if (count_ban_reason > 1) {
@@ -435,7 +420,7 @@ char* cb_modifier_clearchat(const void *pointer,
 	free(string_prefix);
 	weechat_hashtable_free(hashtable_message_parse);
 
-	return string_privmsg;
+	return string_notice;
 }
 
 char* cb_modifier_usernotice(const void *pointer,
@@ -445,47 +430,36 @@ char* cb_modifier_usernotice(const void *pointer,
                              const char *string) {
 
 	struct t_hashtable *hashtable_message_parse = twitch_get_message(string);
-
 	if (!hashtable_message_parse) {
 		return NULL;
 	}
 
-	/* Server Name should be in modifier_data */
 	int length_server = strlen(modifier_data);
-	/* Increment by 1 to include \0 */
-	char *string_server_name = weechat_strndup(modifier_data, length_server + 1);
+	char *string_server = weechat_strndup(modifier_data, length_server);
 
-	int length_channel = strlen(weechat_hashtable_get(hashtable_message_parse, "channel"));
-	char *string_channel_name = weechat_strndup(
-		weechat_hashtable_get(hashtable_message_parse, "channel"),
-		length_channel + 1
-	);
+	char *string_channel = twitch_get_channel(hashtable_message_parse);
 
-	/* Buffer Name: znc-twitch.#day9tv\0
-	 * Adding of 2 to allow for period and endline
+	/* Buffer Name: znc-twitch.#day9tv
+	 * Increment for period
 	 */
-	int length_buffer = 2 + length_server + length_channel;
-	char *string_buffer = calloc(length_buffer, sizeof(char));
-	snprintf(string_buffer, length_buffer, "%s.%s", string_server_name, string_channel_name);
-
-	char *string_buffer_plugin = "irc";
-	struct t_gui_buffer *buffer_channel = weechat_buffer_search(string_buffer_plugin, string_buffer);
-
+	struct t_gui_buffer *buffer_channel = twitch_get_channel_buffer(string_channel, string_server);
 	if (!buffer_channel) {
+		weechat_printf(NULL, "buffer_channel DNE");
 		return NULL;
 	}
 
-	char *string_server_prefix = "server.";
-	int length_server_prefix = strlen(string_server_prefix);
+	//char *string_server_prefix = "server.";
+	//int length_server_prefix = strlen(string_server_prefix);
 
-	int length_server_full = length_server_prefix + length_server + 1;
-	char *string_server_full = calloc(length_server_full, sizeof(char));
+	//int length_server_full = length_server_prefix + length_server + 1;
+	//char *string_server_full = calloc(length_server_full, sizeof(char));
 
-	/* Primary Server Buffer: irc.server.ZNC-Twitch */
-	snprintf(string_server_full, length_server_full, "%s%s", string_server_prefix, string_server_name);
-	struct t_gui_buffer *buffer_server = weechat_buffer_search(string_buffer_plugin, string_server_full);
-
+	///* Primary Server Buffer: irc.server.ZNC-Twitch */
+	//snprintf(string_server_full, length_server_full, "%s%s", string_server_prefix, string_server);
+	//struct t_gui_buffer *buffer_server = weechat_buffer_search("irc", string_server_full);
+	struct t_gui_buffer *buffer_server = twitch_get_server_buffer(string_server);
 	if (!buffer_server) {
+		weechat_printf(NULL, "buffer_server DNE");
 		return NULL;
 	}
 
@@ -596,9 +570,8 @@ char* cb_modifier_usernotice(const void *pointer,
 	}
 
 	/* Stuff to Free */
-	free(string_buffer);
-	free(string_server_name);
-	free(string_channel_name);
+	free(string_server);
+	free(string_channel);
 	weechat_hashtable_free(hashtable_message_parse);
 
 	/* Stuff to Return

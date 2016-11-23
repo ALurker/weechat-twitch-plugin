@@ -60,6 +60,48 @@ char *twitch_get_channel(struct t_hashtable *hashtable) {
 	return twitch_hashtable_get_string(hashtable, "channel");
 }
 
+/* Returns the channel buffer
+ * Input:
+ * 	char *channel: The channel
+ * 	char *server: The server name
+ * Return: free() after use
+ * 	t_gui_buffer *buffer: The buffer for the channel
+ */
+struct t_gui_buffer *twitch_get_channel_buffer(const char *channel, const char *server) {
+	int length_chanel = strlen(channel);
+	int length_server = strlen(server);
+
+	/* format: server.channel */
+	int length_buffer = length_server + 1 + length_chanel;
+	char *search_buffer = calloc(length_buffer + 1, sizeof(char));
+	snprintf(search_buffer, length_buffer + 1, "%s.%s", server, channel);
+	struct t_gui_buffer *buffer = weechat_buffer_search("irc", search_buffer);
+
+	free(search_buffer);
+	return buffer;
+}
+
+/* Returns the server buffer
+ * Input:
+ * 	char *server: The Server
+ * Return: free() after use
+ * 	t_gui_buffer *buffer: The buffer for the server
+ */
+struct t_gui_buffer *twitch_get_server_buffer(const char *server) {
+	int length_server = strlen(server);
+
+	char *prefix = "server";
+	int length_prefix = strlen(prefix);
+
+	int length_buffer = length_prefix + 1 + length_server;
+	char *search_buffer = calloc(length_buffer + 1, sizeof(char));
+	snprintf(search_buffer, length_buffer + 1, "%s.%s", prefix, server);
+	struct t_gui_buffer *buffer = weechat_buffer_search("irc", search_buffer);
+
+	free(search_buffer);
+	return buffer;
+}
+
 /* Turns a message string into a hashtable format
  * Input:
  * 	char *string: The message string
@@ -256,6 +298,42 @@ char *twitch_build_privmsg(const char *host, const char *channel, const char *me
 	         priv,
 	         channel,
 	         space,
+	         colon,
+	         message);
+	return full_message;
+}
+
+
+char *twitch_build_notice_channel(const char *host, const char *channel, const char *message) {
+	int length_channel = strlen(channel);
+	int length_message = strlen(message);
+	int length_host = strlen(host);
+
+	char *colon = ":";
+	int length_colon = strlen(colon);
+	char *space = " ";
+	int length_space = strlen(space);
+
+	char *notice = " NOTICE ";
+	int length_notice = strlen(notice);
+
+	int length_full_message = length_colon;
+	length_full_message += length_host;
+	length_full_message += length_notice;
+	length_full_message += length_channel;
+	length_full_message += length_space;
+	length_full_message += length_colon;
+	length_full_message += length_message;
+
+	char *full_message = calloc(length_full_message + 1, sizeof(char));
+	snprintf(full_message,
+	         length_full_message + 1,
+	         "%s%s%s%s%s%s%s",
+	         colon,
+		 host,
+	         notice,
+	         channel,
+		 space,
 	         colon,
 	         message);
 	return full_message;
