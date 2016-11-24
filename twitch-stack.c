@@ -23,26 +23,6 @@
 #include "twitch.h"
 #include "twitch-stack.h"
 
-struct _twitch_stack {
-	struct _twitch_stack_element *pHead;
-};
-
-struct _twitch_stack_element {
-	union {
-		char *pString;
-		struct t_hashtable *pHashtable;
-		int *pInteger;
-		char **pStringSplit;
-	} data;
-	enum {
-		STRING,
-		HASHTABLE,
-		INTEGER,
-		STRING_SPLIT
-	} type;
-	twitch_stack_element *pNext;
-};
-
 twitch_stack_element *twitch_stack_push_base(twitch_stack *stack) {
 	twitch_stack_element *e = calloc(1, sizeof(twitch_stack_element));
 	e->pNext = stack->pHead;
@@ -97,4 +77,11 @@ void twitch_stack_pop(twitch_stack *stack) {
 	}
 	free(e);
 	return;
+}
+
+int twitch_stack_free(twitch_stack *stack) {
+	while (stack->pHead != NULL) {
+		twitch_stack_pop(stack);
+	}
+	return 1;
 }
