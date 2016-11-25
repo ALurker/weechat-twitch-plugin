@@ -18,10 +18,17 @@
   **/
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "weechat-plugin.h"
 #include "twitch.h"
 #include "twitch-stack.h"
+
+twitch_stack *twitch_stack_create() {
+	twitch_stack *stack = malloc(sizeof(twitch_stack));
+	stack->pHead = NULL;
+	return stack;
+}
 
 twitch_stack_element *twitch_stack_push_base(twitch_stack *stack) {
 	twitch_stack_element *e = calloc(1, sizeof(twitch_stack_element));
@@ -58,9 +65,13 @@ int twitch_stack_push_hashtable(struct t_hashtable *hashtable, twitch_stack *sta
 	return 1;
 }
 
-void twitch_stack_pop(twitch_stack *stack) {
+twitch_stack_element *twitch_stack_pop(twitch_stack *stack) {
 	twitch_stack_element *e = stack->pHead;
 	stack->pHead = e->pNext;
+	return e;
+}
+
+void twitch_stack_free_element(twitch_stack_element *e) {
 	switch(e->type) {
 		case STRING:
 			free(e->data.pString);
@@ -81,7 +92,8 @@ void twitch_stack_pop(twitch_stack *stack) {
 
 int twitch_stack_free(twitch_stack *stack) {
 	while (stack->pHead != NULL) {
-		twitch_stack_pop(stack);
+		twitch_stack_free_element(twitch_stack_pop(stack));
 	}
+	free(stack);
 	return 1;
 }

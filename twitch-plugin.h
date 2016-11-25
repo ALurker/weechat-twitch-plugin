@@ -22,6 +22,7 @@
 
 extern char *twitch_parse_tag(char *tag);
 extern char *twitch_get_channel(struct t_hashtable *hashtable);
+extern char *twitch_get_hostname(struct t_hashtable *hashtable);
 extern struct t_gui_buffer *twitch_get_channel_buffer(const char *channel, const char *server);
 extern struct t_gui_buffer *twitch_get_server_buffer(const char *server);
 

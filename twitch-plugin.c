@@ -60,19 +60,29 @@ char *twitch_get_channel(struct t_hashtable *hashtable) {
 	return twitch_hashtable_get_string(hashtable, "channel");
 }
 
+/* Grabs the hostname from the message
+ * Input:
+ * 	hashtable: Contains the message in a hashtable
+ * Return: free() after use
+ * 	char *: the hostname
+ */
+char *twitch_get_hostname(struct t_hashtable *hashtable) {
+	return twitch_hashtable_get_string(hashtable, "host");
+}
+
 /* Returns the channel buffer
  * Input:
  * 	char *channel: The channel
  * 	char *server: The server name
- * Return: free() after use
+ * Return:
  * 	t_gui_buffer *buffer: The buffer for the channel
  */
 struct t_gui_buffer *twitch_get_channel_buffer(const char *channel, const char *server) {
-	int length_chanel = strlen(channel);
+	int length_channel = strlen(channel);
 	int length_server = strlen(server);
 
 	/* format: server.channel */
-	int length_buffer = length_server + 1 + length_chanel;
+	int length_buffer = length_server + 1 + length_channel;
 	char *search_buffer = calloc(length_buffer + 1, sizeof(char));
 	snprintf(search_buffer, length_buffer + 1, "%s.%s", server, channel);
 	struct t_gui_buffer *buffer = weechat_buffer_search("irc", search_buffer);

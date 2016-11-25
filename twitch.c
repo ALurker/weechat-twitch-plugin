@@ -25,6 +25,7 @@
 
 #include "twitch.h"
 #include "twitch-plugin.h"
+#include "twitch-stack.h"
 
 WEECHAT_PLUGIN_NAME("twitch");
 WEECHAT_PLUGIN_DESCRIPTION("Twitch plugin for WeeChat");
@@ -429,15 +430,30 @@ char* cb_modifier_usernotice(const void *pointer,
                              const char *modifier_data,
                              const char *string) {
 
+	twitch_stack *mem_stack = twitch_stack_create();
 	struct t_hashtable *hashtable_message_parse = twitch_get_message(string);
 	if (!hashtable_message_parse) {
 		return NULL;
 	}
+	twitch_stack_push(hashtable_message_parse, mem_stack);
 
 	int length_server = strlen(modifier_data);
 	char *string_server = weechat_strndup(modifier_data, length_server);
+	if (!string_server) {
+		weechat_printf(NULL, "string_server DNE");
+		twitch_stack_free(mem_stack);
+		return NULL;
+	}
+	twitch_stack_push(string_server, mem_stack);
 
 	char *string_channel = twitch_get_channel(hashtable_message_parse);
+	if (!string_channel) {
+		weechat_printf(NULL, "string_cahnnel DNE");
+		twitch_stack_free(mem_stack);
+		return NULL;
+	}
+	twitch_stack_push(string_channel, mem_stack);
+	int length_channel = strlen(string_channel);
 
 	/* Buffer Name: znc-twitch.#day9tv
 	 * Increment for period
@@ -445,143 +461,148 @@ char* cb_modifier_usernotice(const void *pointer,
 	struct t_gui_buffer *buffer_channel = twitch_get_channel_buffer(string_channel, string_server);
 	if (!buffer_channel) {
 		weechat_printf(NULL, "buffer_channel DNE");
+		twitch_stack_free(mem_stack);
 		return NULL;
 	}
 
-	//char *string_server_prefix = "server.";
-	//int length_server_prefix = strlen(string_server_prefix);
-
-	//int length_server_full = length_server_prefix + length_server + 1;
-	//char *string_server_full = calloc(length_server_full, sizeof(char));
-
-	///* Primary Server Buffer: irc.server.ZNC-Twitch */
-	//snprintf(string_server_full, length_server_full, "%s%s", string_server_prefix, string_server);
-	//struct t_gui_buffer *buffer_server = weechat_buffer_search("irc", string_server_full);
 	struct t_gui_buffer *buffer_server = twitch_get_server_buffer(string_server);
 	if (!buffer_server) {
 		weechat_printf(NULL, "buffer_server DNE");
+		twitch_stack_free(mem_stack);
 		return NULL;
 	}
 
+	/* Tags prefix the message, seperated by a ; */
+	int count_tags;
+	char **tags;
 	if (weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
-		/* Tags should be seperated by ; */
-		int count_tags;
-		char **tags;
-		tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"),
-		                            ";",
-		                            0,
-		                            0,
-		                            &count_tags
-		);
+		tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"), ";", 0, 0, &count_tags);
+	}
+	if (!tags) {
+		weechat_printf(NULL, "tags DNE");
+		twitch_stack_free(mem_stack);
+		return NULL;
+	}
+	twitch_stack_push(tags, mem_stack);
 
-		if (!tags) {
-			return NULL;
+	int count_system_message;
+	char **system_message_array;
+	for (int i = 0; i < count_tags; i++) {
+		if (weechat_string_match(tags[i], "system-msg=*", 1)) {
+			system_message_array = weechat_string_split(tags[i], "=", 0, 2, &count_system_message);
+			/* Once we find system-msg, no need to continue for loop */
+			i = count_tags;
 		}
+	}
+	if (!system_message_array) {
+		weechat_printf(NULL, "system_message_array DNE");
+		twitch_stack_free(mem_stack);
+		return NULL;
+	}
+	twitch_stack_push(system_message_array, mem_stack);
 
-		int count_system_message;
-		char **system_message_array;
-		for (int i = 0; i < count_tags; i++) {
-			if (weechat_string_match(tags[i], "system-msg=*", 1)) {
-				system_message_array = weechat_string_split(tags[i], "=", 0, 2, &count_system_message);
-				/* Once we find system-msg, no need to continue for loop */
-				i = count_tags;
-			}
-		}
+	/* If above worked correctly, system_message_array[1] should have the message
+	 * however, twitch is odd in that spaces are replaced with \\s
+	 */
 
-		if (!system_message_array) {
-			return NULL;
-		}
+	char *system_message = weechat_string_replace(system_message_array[1], "\\s", " ");
+	int length_system_message = strlen(system_message);
+	if (!system_message) {
+		weechat_printf(NULL, "system_message DNE");
+		twitch_stack_free(mem_stack);
+		return NULL;
+	}
+	twitch_stack_push(system_message, mem_stack);
 
-		/* If above worked correctly, system_message_array[1] should have the message
-		 * however, twitch is odd in that spaces are replaced with \\s
-		 */
+	/* Done unless there is the optional text
+	 * In that case, append
+	 */
 
-		char *system_message = weechat_string_replace(system_message_array[1], "\\s", " ");
+	char *string_comment = NULL;
+	int length_comment;
+	char *string_comment_prefix = " [Comment: ";
+	int length_comment_prefix = strlen(string_comment_prefix);
 
-		/* Done unless there is the optional text
-		 * In that case, append
-		 */
-
-		char *string_comment = NULL;
-		int is_key_text = weechat_hashtable_has_key(hashtable_message_parse, "text");
-		int is_key_pos = weechat_hashtable_has_key(hashtable_message_parse, "pos_text");
-		if ((is_key_text != 0) && (is_key_pos != 0)) {
-			char *pos_value = weechat_hashtable_get(hashtable_message_parse, "pos_text");
-			if (weechat_strcasecmp(pos_value, "-1") != 0) {
-				char *string_comment_prefix = " [Comment: ";
-				int length_comment_prefix = strlen(string_comment_prefix);
-
-				int length_text = strlen(weechat_hashtable_get(hashtable_message_parse, "text"));
-				char *string_comment_text = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "text"), length_text + 1);
-
+	int is_key_text = weechat_hashtable_has_key(hashtable_message_parse, "text");
+	int is_key_pos = weechat_hashtable_has_key(hashtable_message_parse, "pos_text");
+	if ((is_key_text != 0) && (is_key_pos != 0)) {
+		char *pos_value = weechat_hashtable_get(hashtable_message_parse, "pos_text");
+		if (weechat_strcasecmp(pos_value, "-1") != 0) {
+			int length_text = strlen(weechat_hashtable_get(hashtable_message_parse, "text"));
+			char *string_text = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "text"), length_text + 1);
+			if (string_text) {
+				twitch_stack_push(string_text, mem_stack);
 				char *string_comment_suffix = "]";
 				int length_comment_suffix = strlen(string_comment_suffix);
 
-				int length_comment = length_comment_prefix + length_text + length_comment_suffix + 1;
+				length_comment = length_comment_prefix + length_text + length_comment_suffix;
 
-				string_comment = calloc(length_comment, sizeof(char));
-				snprintf(string_comment, length_comment, "%s%s%s", string_comment_prefix, string_comment_text, string_comment_suffix);
-
-				weechat_printf(buffer_server,
-				               "%s%s%s",
-				               weechat_prefix("network"),
-				               system_message,
-				               string_comment
-				);
-				weechat_printf(buffer_channel,
-				               "%s%s%s",
-				               weechat_prefix("network"),
-				               system_message,
-				               string_comment
-				);
-
-				/* Stuff to Free only if text */
-				free(string_comment_text);
-			} else {
-				weechat_printf(buffer_server,
-				               "%s%s",
-				               weechat_prefix("network"),
-				               system_message
-				);
-				weechat_printf(buffer_channel,
-				               "%s%s",
-				               weechat_prefix("network"),
-				               system_message
-				);
+				string_comment = calloc(length_comment + 1, sizeof(char));
+				snprintf(string_comment, length_comment + 1, "%s%s%s", string_comment_prefix, string_text, string_comment_suffix);
+				twitch_stack_push(string_comment, mem_stack);
 			}
-		} else {
-			weechat_printf(buffer_server,
-				       "%s%s",
-				       weechat_prefix("network"),
-				       system_message
-			);
-			weechat_printf(buffer_channel,
-				       "%s%s",
-				       weechat_prefix("network"),
-				       system_message
-			);
 		}
-
-		/* Stuff to Free only if tags */
-		free(system_message);
-		weechat_string_free_split(system_message_array);
-		weechat_string_free_split(tags);
-
 	}
 
+	char *string_return_server = NULL;
+	int length_return_server;
+	char *string_return_channel = NULL;
+	int length_return_channel;
+
+	char *colon = ":";
+	int length_colon = strlen(colon);
+	char *space = " ";
+	int length_space = strlen(space);
+
+	/* Build the message */
+	if (string_comment) {
+		length_return_channel = length_system_message + length_comment;
+		string_return_channel = calloc(length_return_channel + 1, sizeof(char));
+		snprintf(string_return_channel,
+		         length_return_channel + 1,
+		         "%s%s",
+		         system_message,
+		         string_comment);
+
+		twitch_stack_push(string_return_channel, mem_stack);
+
+	} else {
+		length_return_channel = length_system_message;
+		string_return_channel = system_message;
+	}
+
+	length_return_server = length_channel + length_colon;
+	length_return_server += length_space;
+	length_return_server += length_return_channel;
+	string_return_server = calloc(length_return_server + 1, sizeof(char));
+	snprintf(string_return_server,
+		 length_return_server + 1,
+		 "%s%s%s%s",
+		 string_channel,
+		 colon,
+		 space,
+		 string_return_channel);
+	twitch_stack_push(string_return_server, mem_stack);
+
+	weechat_printf(buffer_server, "%s%s", weechat_prefix("network"), string_return_server);
+
+	/* Build the return message */
+	char *host = twitch_get_hostname(hashtable_message_parse);
+	twitch_stack_push(host, mem_stack);
+	char *string_notice = twitch_build_notice_channel(host, string_channel, string_return_channel);
+
+	/* Stuff to Free only if tags */
 	/* Stuff to Free */
-	free(string_server);
-	free(string_channel);
-	weechat_hashtable_free(hashtable_message_parse);
+	twitch_stack_free(mem_stack);
 
-	/* Stuff to Return
-	 * For some reason returning an empty string gets rid of the command not found message
-	 */
+	///* Stuff to Return
+	// * For some reason returning an empty string gets rid of the command not found message
+	// */
 
-	int length_return = 2;
-	char *result = malloc(length_return);
-	snprintf(result, length_return, "%s", "");
-	return result;
+	//int length_return = 2;
+	//char *result = calloc(length_return, sizeof(char));
+	//snprintf(result, length_return, "%s", "");
+	return string_notice;
 }
 
 int weechat_plugin_init(struct t_weechat_plugin *plugin,
