@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "weechat-plugin.h"
 #include "twitch.h"
@@ -347,4 +348,31 @@ char *twitch_build_notice_channel(const char *host, const char *channel, const c
 	         colon,
 	         message);
 	return full_message;
+}
+
+/* Max intermediate String Size: 1024
+ */
+char *twitch_build_string(int count, ...) {
+	va_list ap;
+	char *string_intermediate = calloc(1024, sizeof(char));
+	char *string_intermediate_two = NULL;
+	char *string_final = NULL;
+	int length_string = 0;
+
+	va_start(ap, count);
+	for(int i = 0; i < count; i++) {
+		snprintf(string_intermediate, 1024, "%s", va_arg(ap, const char*));
+		length_string += strlen(string_intermediate);
+		if(!string_final) {
+			string_final = calloc(length_string + 1, sizeof(char));
+			snprintf(string_final, length_string + 1, "%s", string_intermediate);
+		} else {
+			string_intermediate_two = string_final;
+			string_final = calloc(length_string + 1, sizeof(char));
+			snprintf(string_final, length_string + 1, "%s%s", string_intermediate_two, string_intermediate);
+			free(string_intermediate_two);
+		}
+	}
+	va_end(ap);
+	return string_final;
 }

@@ -52,27 +52,38 @@ char* cb_modifier_roomstate(const void *pointer,
 	 * @msg-id=subs_off :tmi.twitch.tv NOTICE #day9tv :This room is no longer in subscribers-only mode
 	 */
 
+	twitch_stack *mem_stack = twitch_stack_create();
+
 	struct t_hashtable *hashtable_message_parse = twitch_get_message(string);
+	if (!hashtable_message_parse) {
+		return NULL;
+	}
+	twitch_stack_push(hashtable_message_parse, mem_stack);
 
 	if (!weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
 		weechat_printf(NULL, "No Tags in hashtable_message_parse");
+		twitch_stack_free(mem_stack);
 		return NULL;
 	}
 
 	/* Get the Channel Buffer */
 	char *string_buffer_plugin = "irc";
 
-	int length_server = strlen(modifier_data);
-	char *string_server = calloc(length_server + 1, sizeof(char));
-	snprintf(string_server, length_server + 1, "%s", modifier_data);
+	//int length_server = strlen(modifier_data);
+	char *string_server = twitch_build_string(1, modifier_data);
+	twitch_stack_push(string_server, mem_stack);
 
 	char *string_channel = twitch_get_channel(hashtable_message_parse);
-	int length_channel = strlen(string_channel);
+	twitch_stack_push(string_channel, mem_stack);
+	//int length_channel = strlen(string_channel);
 
-	/* Include the +1 below for the period between server and channel */
-	int length_buffer_channel = length_server + length_channel + 1;
-	char *string_buffer_channel = calloc(length_buffer_channel + 1, sizeof(char));
-	snprintf(string_buffer_channel, length_buffer_channel + 1, "%s.%s", string_server, string_channel);
+	char *string_buffer_channel = twitch_build_string(3, string_server, ".", string_channel);
+	if (!string_buffer_channel) {
+		weechat_printf(NULL, "string_buffer_channel DNE");
+		twitch_stack_free(mem_stack);
+		return NULL;
+	}
+	twitch_stack_push(string_buffer_channel, mem_stack);
 	struct t_gui_buffer *buffer_channel = weechat_buffer_search(string_buffer_plugin, string_buffer_channel);
 
 	/* Potential Tags
@@ -83,14 +94,13 @@ char* cb_modifier_roomstate(const void *pointer,
 	 * slow
 	 * subs-only
 	 */
-
 	int count_tags = 0;
 	char **tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"), ";", 0, 0, &count_tags);
-
 	if (!tags) {
 		weechat_printf(NULL, "Unable to split hashtable_message_parse into tags");
 		return NULL;
 	}
+	twitch_stack_push(tags, mem_stack);
 
 	char *string_language = NULL;
 	char *string_emote = NULL;
@@ -103,16 +113,19 @@ char* cb_modifier_roomstate(const void *pointer,
 			 * "" => en
 			 */
 			string_language = twitch_parse_tag(tags[i]);
+			twitch_stack_push(string_language, mem_stack);
 		} else if (weechat_string_match(tags[i], "emote-only=*", 1)) {
 			/* Assign Emote Only to string_emote
 			 * Valid should be 0 => False, 1 => True
 			 */
 			string_emote = twitch_parse_tag(tags[i]);
+			twitch_stack_push(string_emote, mem_stack);
 		} else if (weechat_string_match(tags[i], "r9k=*", 1)) {
 			/* Assign r9k value to string_r9k
 			 * TODO research what this value actually means
 			 */
 			string_r9k = twitch_parse_tag(tags[i]);
+			twitch_stack_push(string_r9k, mem_stack);
 		} else if (weechat_string_match(tags[i], "slow=*", 1)) {
 			/* Assign slow value to string_slow
 			 * I'm given to understanding that different values
@@ -120,11 +133,13 @@ char* cb_modifier_roomstate(const void *pointer,
 			 * TODO research on the possible values here
 			 */
 			string_slow = twitch_parse_tag(tags[i]);
+			twitch_stack_push(string_slow, mem_stack);
 		} else if (weechat_string_match(tags[i], "subs-only=*", 1)) {
 			/* Assign subs-only value to string_subs
 			 * 0 => False, 1 => True
 			 */
 			string_subs = twitch_parse_tag(tags[i]);
+			twitch_stack_push(string_subs, mem_stack);
 		}
 	}
 
@@ -147,26 +162,7 @@ char* cb_modifier_roomstate(const void *pointer,
 	}
 
 	/* Stuff to Free */
-	if(string_language) {
-		free(string_language);
-	}
-	if(string_emote) {
-		free(string_emote);
-	}
-	if(string_r9k) {
-		free(string_r9k);
-	}
-	if(string_slow) {
-		free(string_slow);
-	}
-	if(string_subs) {
-		free(string_subs);
-	}
-	free(string_server);
-	free(string_channel);
-	free(string_buffer_channel);
-	weechat_string_free_split(tags);
-	weechat_hashtable_free(hashtable_message_parse);
+	twitch_stack_free(mem_stack);
 
 	/* Stuff to Return
 	 * For some reason returning an empty string gets rid of the command not found message
@@ -208,9 +204,6 @@ char* cb_modifier_clearchat(const void *pointer,
 
 	int length_user = strlen(weechat_hashtable_get(hashtable_message_parse, "text"));
 	char *string_user = weechat_strndup(weechat_hashtable_get(hashtable_message_parse, "text"), length_user + 1);
-
-	//weechat_printf(NULL, "Length User: %d", length_user);
-	//weechat_printf(NULL, "User: %s", string_user);
 
 	/* Get the Channel Buffer */
 	char *string_buffer_plugin = "irc";

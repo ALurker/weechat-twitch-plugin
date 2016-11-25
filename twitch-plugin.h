@@ -35,5 +35,6 @@ extern void twitch_buffer_update_local(struct t_gui_buffer *buffer, const char *
 extern char *twitch_build_privmsg_extended(const char *user, const char *host, const char *channel, const char *message);
 extern char *twitch_build_privmsg(const char *host, const char *channel, const char *message);
 extern char *twitch_build_notice_channel(const char *host, const char *channel, const char *message);
+extern char *twitch_build_string(int count, ...);
 
 #endif /* TWITCH_PLUGIN_H */
