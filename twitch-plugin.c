@@ -314,7 +314,8 @@ char *twitch_build_privmsg(const char *host, const char *channel, const char *me
 	return full_message;
 }
 
-
+/* Free after use, unless returned by callback
+ */
 char *twitch_build_notice_channel(const char *host, const char *channel, const char *message) {
 	int length_channel = strlen(channel);
 	int length_message = strlen(message);
@@ -351,6 +352,7 @@ char *twitch_build_notice_channel(const char *host, const char *channel, const c
 }
 
 /* Max intermediate String Size: 1024
+ * free() after use
  */
 char *twitch_build_string(int count, ...) {
 	va_list ap;

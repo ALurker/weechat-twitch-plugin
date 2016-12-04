@@ -75,7 +75,6 @@ char* cb_modifier_roomstate(const void *pointer,
 
 	char *string_channel = twitch_get_channel(hashtable_message_parse);
 	twitch_stack_push(string_channel, mem_stack);
-	//int length_channel = strlen(string_channel);
 
 	char *string_buffer_channel = twitch_build_string(3, string_server, ".", string_channel);
 	if (!string_buffer_channel) {
@@ -84,6 +83,7 @@ char* cb_modifier_roomstate(const void *pointer,
 		return NULL;
 	}
 	twitch_stack_push(string_buffer_channel, mem_stack);
+
 	struct t_gui_buffer *buffer_channel = weechat_buffer_search(string_buffer_plugin, string_buffer_channel);
 
 	/* Potential Tags
@@ -143,34 +143,60 @@ char* cb_modifier_roomstate(const void *pointer,
 		}
 	}
 
+	char *string_prefix = "ROOMSTATE defined ";
+	char *string_output = calloc(strlen(string_prefix) + 1, sizeof(char));
+	snprintf(string_output, strlen(string_prefix) + 1, "%s", string_prefix);
+	char *string_intermediate = string_output;
 	/* We only care if the variable has changed for that buffer */
 	if(string_language) {
 		twitch_buffer_update_local(buffer_channel, "lang", string_language);
+		string_output = twitch_build_string(4, string_prefix, "lang: ", string_language, " ");
+		free(string_intermediate);
+		string_intermediate = string_output;
 	}
 
 	if(string_emote) {
 		twitch_buffer_update_local(buffer_channel, "emote", string_emote);
+		string_output = twitch_build_string(4, string_output, "emote: ", string_emote, " ");
+		free(string_intermediate);
+		string_intermediate = string_output;
 	}
 	if(string_r9k) {
 		twitch_buffer_update_local(buffer_channel, "r9k", string_r9k);
+		string_output = twitch_build_string(4, string_output, "r9k: ", string_r9k, " ");
+		free(string_intermediate);
+		string_intermediate = string_output;
 	}
 	if(string_slow) {
 		twitch_buffer_update_local(buffer_channel, "slow", string_slow);
+		string_output = twitch_build_string(4, string_output, "slow: ", string_slow, " ");
+		free(string_intermediate);
+		string_intermediate = string_output;
 	}
 	if(string_subs) {
 		twitch_buffer_update_local(buffer_channel, "subs", string_subs);
+		string_output = twitch_build_string(4, string_output, "subs: ", string_subs, " ");
+		free(string_intermediate);
+		string_intermediate = string_output;
 	}
+	twitch_stack_push(string_output, mem_stack);
+
+	char *string_hostname = twitch_get_hostname(hashtable_message_parse);
+	if(!string_hostname) {
+		twitch_stack_free(mem_stack);
+		return NULL;
+	}
+	twitch_stack_push(string_hostname, mem_stack);
+
+	//string_channel already defined at this point.
+	char *string_final = twitch_build_notice_channel(string_hostname,
+	                                                 string_channel,
+	                                                 string_output);
 
 	/* Stuff to Free */
 	twitch_stack_free(mem_stack);
 
-	/* Stuff to Return
-	 * For some reason returning an empty string gets rid of the command not found message
-	 */
-	int length_return = 2;
-	char *result = malloc(length_return);
-	snprintf(result, length_return, "%s", "");
-	return result;
+	return string_final;
 }
 
 char* cb_modifier_clearchat(const void *pointer,
