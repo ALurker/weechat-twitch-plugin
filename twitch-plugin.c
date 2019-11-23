@@ -34,7 +34,7 @@
  */
 char *twitch_parse_tag(char *tag) {
 	int count_tag = 0;
-	char **array_string_tag = weechat_string_split(tag, "=", 0, 2, &count_tag);
+	char **array_string_tag = weechat_string_split(tag, "=", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 2, &count_tag);
 
 	int length_contents;
 	char *string_contents;

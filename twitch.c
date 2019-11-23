@@ -95,7 +95,12 @@ char* cb_modifier_roomstate(const void *pointer,
 	 * subs-only
 	 */
 	int count_tags = 0;
-	char **tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"), ";", 0, 0, &count_tags);
+	char **tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"),
+			";",
+			NULL,
+			WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
+			0,
+			&count_tags);
 	if (!tags) {
 		weechat_printf(NULL, "Unable to split hashtable_message_parse into tags");
 		return NULL;
@@ -237,7 +242,8 @@ char* cb_modifier_clearchat(const void *pointer,
 	/* Tags should be seperated by ; */
 	tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"),
 				    ";",
-				    0,
+				    NULL,
+				    WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
 				    0,
 				    &count_tags
 	);
@@ -248,9 +254,9 @@ char* cb_modifier_clearchat(const void *pointer,
 	char **ban_duration_array;
 	for (int i = 0; i < count_tags; i++) {
 		if (weechat_string_match(tags[i], "ban-reason=*", 1)) {
-			ban_reason_array = weechat_string_split(tags[i], "=", 0, 2, &count_ban_reason);
+			ban_reason_array = weechat_string_split(tags[i], "=", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 2, &count_ban_reason);
 		} else if (weechat_string_match(tags[i], "ban-duration=*", 1)) {
-			ban_duration_array = weechat_string_split(tags[i], "=", 0, 2, &count_ban_duration);
+			ban_duration_array = weechat_string_split(tags[i], "=", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 2, &count_ban_duration);
 		}
 	}
 
@@ -469,7 +475,7 @@ char* cb_modifier_usernotice(const void *pointer,
 	int count_tags;
 	char **tags;
 	if (weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
-		tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"), ";", 0, 0, &count_tags);
+		tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"), ";", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 0, &count_tags);
 	}
 	if (!tags) {
 		weechat_printf(NULL, "tags DNE");
@@ -482,7 +488,7 @@ char* cb_modifier_usernotice(const void *pointer,
 	char **system_message_array;
 	for (int i = 0; i < count_tags; i++) {
 		if (weechat_string_match(tags[i], "system-msg=*", 1)) {
-			system_message_array = weechat_string_split(tags[i], "=", 0, 2, &count_system_message);
+			system_message_array = weechat_string_split(tags[i], "=", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 2, &count_system_message);
 			/* Once we find system-msg, no need to continue for loop */
 			i = count_tags;
 		}
