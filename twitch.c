@@ -486,11 +486,18 @@ char* cb_modifier_usernotice(const void *pointer,
 
 	int count_system_message;
 	char **system_message_array;
+	char **message_id_array;
+	int found_tags = 0;
 	for (int i = 0; i < count_tags; i++) {
+		if (found_tags >= 2) {
+			break;
+		}
 		if (weechat_string_match(tags[i], "system-msg=*", 1)) {
 			system_message_array = weechat_string_split(tags[i], "=", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 2, &count_system_message);
-			/* Once we find system-msg, no need to continue for loop */
-			i = count_tags;
+			found_tags += 1;
+		} else if (weechat_string_match(tags[i], "msg-id=*", 1)) {
+			message_id_array = weechat_string_split(tags[i], "=", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 2, &count_system_message);
+			found_tags += 1;
 		}
 	}
 	if (!system_message_array) {
@@ -499,18 +506,25 @@ char* cb_modifier_usernotice(const void *pointer,
 		return NULL;
 	}
 	twitch_stack_push(system_message_array, mem_stack);
-
+	if (!message_id_array) {
+		weechat_printf(NULL, "message_id_array DNE");
+		twitch_stack_free(mem_stack);
+		return NULL;
+	}
+	twitch_stack_push(message_id_array, mem_stack);
+	
 	/* If above worked correctly, system_message_array[1] should have the message
 	 * however, twitch is odd in that spaces are replaced with \\s
 	 */
 
 	char *system_message = weechat_string_replace(system_message_array[1], "\\s", " ");
-	int length_system_message = strlen(system_message);
 	if (!system_message) {
-		weechat_printf(NULL, "system_message DNE");
+		// System message was empty
+		// FIXME - should still be able to put notice into chat
 		twitch_stack_free(mem_stack);
 		return NULL;
 	}
+	int length_system_message = strlen(system_message);
 	twitch_stack_push(system_message, mem_stack);
 
 	/* Done unless there is the optional text
