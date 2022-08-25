@@ -37,4 +37,6 @@ extern char *twitch_build_privmsg(const char *host, const char *channel, const c
 extern char *twitch_build_notice_channel(const char *host, const char *channel, const char *message);
 extern char *twitch_build_string(int count, ...);
 
+extern char **twitch_get_tag(int tag_count, char **tags, char *match, int *response_count);
+
 #endif /* TWITCH_PLUGIN_H */

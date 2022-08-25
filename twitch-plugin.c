@@ -376,3 +376,28 @@ char *twitch_build_string(int count, ...) {
 	va_end(ap);
 	return string_final;
 }
+
+/* Parses the tags that meet the match pattern out of a
+ * USERNOTICE
+ */
+char **twitch_get_tag(
+		int tag_count,
+		char **tags,
+		char *match,
+		int *response_count) {
+	char** response;
+	for (int i = 0; i < tag_count; i++) {
+		if (weechat_string_match(tags[i], match, 1)) {
+			response = weechat_string_split(
+					tags[i],
+					"=",
+					NULL,
+					WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
+					2,
+					response_count
+					);
+			break;
+		}
+	}
+	return response;
+}

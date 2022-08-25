@@ -475,7 +475,17 @@ char* cb_modifier_usernotice(const void *pointer,
 	int count_tags;
 	char **tags;
 	if (weechat_hashtable_has_key(hashtable_message_parse, "tags")) {
-		tags = weechat_string_split(weechat_hashtable_get(hashtable_message_parse, "tags"), ";", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 0, &count_tags);
+		tags = weechat_string_split(
+				weechat_hashtable_get(
+					hashtable_message_parse,
+					"tags"
+					),
+				";",
+				NULL,
+				WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
+				0,
+				&count_tags
+				);
 	}
 	if (!tags) {
 		weechat_printf(NULL, "tags DNE");
@@ -485,21 +495,21 @@ char* cb_modifier_usernotice(const void *pointer,
 	twitch_stack_push(tags, mem_stack);
 
 	int count_system_message;
-	char **system_message_array;
-	char **message_id_array;
-	int found_tags = 0;
-	for (int i = 0; i < count_tags; i++) {
-		if (found_tags >= 2) {
-			break;
-		}
-		if (weechat_string_match(tags[i], "system-msg=*", 1)) {
-			system_message_array = weechat_string_split(tags[i], "=", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 2, &count_system_message);
-			found_tags += 1;
-		} else if (weechat_string_match(tags[i], "msg-id=*", 1)) {
-			message_id_array = weechat_string_split(tags[i], "=", NULL, WEECHAT_STRING_SPLIT_STRIP_LEFT | WEECHAT_STRING_SPLIT_STRIP_RIGHT | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS, 2, &count_system_message);
-			found_tags += 1;
-		}
-	}
+	char** system_message_array = twitch_get_tag(
+			count_tags,
+			tags,
+			"system-msg=*",
+			&count_system_message
+			);
+
+
+	int count_message_id;
+	char** message_id_array = twitch_get_tag(
+			count_tags,
+			tags,
+			"msg-id=*",
+			&count_message_id
+			);
 	if (!system_message_array) {
 		weechat_printf(NULL, "system_message_array DNE");
 		twitch_stack_free(mem_stack);
@@ -517,12 +527,17 @@ char* cb_modifier_usernotice(const void *pointer,
 	 * however, twitch is odd in that spaces are replaced with \\s
 	 */
 
-	char *system_message = weechat_string_replace(system_message_array[1], "\\s", " ");
-	if (!system_message) {
+	char *system_message = NULL;
+	if (!system_message_array[1]) {
 		// System message was empty
 		// FIXME - should still be able to put notice into chat
-		twitch_stack_free(mem_stack);
-		return NULL;
+		//twitch_stack_free(mem_stack);
+		//return NULL;
+		// init to empty string
+		system_message = (char*)calloc(1, sizeof(char));
+		snprintf(system_message, 1, "%s", "");
+	} else {
+		system_message = weechat_string_replace(system_message_array[1], "\\s", " ");
 	}
 	int length_system_message = strlen(system_message);
 	twitch_stack_push(system_message, mem_stack);
